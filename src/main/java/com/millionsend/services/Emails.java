@@ -1,0 +1,56 @@
+package com.millionsend.services;
+
+import static com.millionsend.core.HttpClient.enc;
+
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.millionsend.MillionSendException;
+import com.millionsend.core.HttpClient;
+import com.millionsend.model.CreateEmailOptions;
+import com.millionsend.model.CreateEmailResponse;
+import com.millionsend.model.DeletedResponse;
+import com.millionsend.model.Email;
+
+/** The {@code emails} resource: send, get, cancel. */
+public final class Emails {
+
+  private final HttpClient http;
+
+  public Emails(HttpClient http) {
+    this.http = http;
+  }
+
+  /** POST /emails */
+  public CreateEmailResponse send(CreateEmailOptions options) throws MillionSendException {
+    return send(options, null);
+  }
+
+  /** POST /emails with an {@code Idempotency-Key}. */
+  public CreateEmailResponse send(CreateEmailOptions options, String idempotencyKey)
+      throws MillionSendException {
+    return http.request(
+        "POST", "/emails", options, null, idempotencyKey, new TypeReference<CreateEmailResponse>() {});
+  }
+
+  /** Alias of {@link #send(CreateEmailOptions)}, mirroring Resend. */
+  public CreateEmailResponse create(CreateEmailOptions options) throws MillionSendException {
+    return send(options);
+  }
+
+  /** Alias of {@link #send(CreateEmailOptions, String)}, mirroring Resend. */
+  public CreateEmailResponse create(CreateEmailOptions options, String idempotencyKey)
+      throws MillionSendException {
+    return send(options, idempotencyKey);
+  }
+
+  /** GET /emails/{id} */
+  public Email get(String id) throws MillionSendException {
+    return http.request("GET", "/emails/" + enc(id), null, null, null, new TypeReference<Email>() {});
+  }
+
+  /** POST /emails/{id}/cancel — scheduled, unsent emails only. */
+  public DeletedResponse cancel(String id) throws MillionSendException {
+    return http.request(
+        "POST", "/emails/" + enc(id) + "/cancel", null, null, null,
+        new TypeReference<DeletedResponse>() {});
+  }
+}
