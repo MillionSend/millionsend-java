@@ -23,6 +23,8 @@ final class MockServer implements AutoCloseable {
 
   volatile String method;
   volatile String path;
+  /** The undecoded request path, so percent-encoding itself can be asserted. */
+  volatile String rawPath;
   volatile String query;
   volatile String body;
   volatile Headers headers;
@@ -35,6 +37,7 @@ final class MockServer implements AutoCloseable {
           method = exchange.getRequestMethod();
           URI uri = exchange.getRequestURI();
           path = uri.getPath();
+          rawPath = uri.getRawPath();
           query = uri.getRawQuery();
           headers = exchange.getRequestHeaders();
           body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);

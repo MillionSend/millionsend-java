@@ -120,7 +120,9 @@ class ResourcesTest {
     assertEquals("/contacts/c1", server.path);
 
     ms.contacts().get(ContactAddress.email("c@x.dev"));
-    assertEquals("/contacts/c@x.dev", server.path); // decoded by the server; sent as c%40x.dev
+    // The raw (undecoded) path proves the client percent-encoded the segment.
+    assertEquals("/contacts/c%40x.dev", server.rawPath);
+    assertEquals("/contacts/c@x.dev", server.path);
 
     ms.contacts().get(ContactAddress.builder().audienceId("a1").id("c1").build());
     assertEquals("/audiences/a1/contacts/c1", server.path);
