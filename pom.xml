@@ -11,7 +11,7 @@
 
   <name>millionsend-java</name>
   <description>Official MillionSend SDK for Java — a Resend-compatible email API you can self-host.</description>
-  <url>https://github.com/MillionSend/millionsend/tree/main/sdks/java</url>
+  <url>https://github.com/MillionSend/millionsend-java</url>
 
   <licenses>
     <license>
@@ -22,7 +22,7 @@
 
   <scm>
     <connection>scm:git:git://github.com/MillionSend/millionsend.git</connection>
-    <url>https://github.com/MillionSend/millionsend</url>
+    <url>https://github.com/MillionSend/millionsend-java</url>
   </scm>
 
   <properties>
