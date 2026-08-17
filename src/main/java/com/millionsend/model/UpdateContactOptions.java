@@ -4,8 +4,8 @@ import java.util.LinkedHashMap;
 import java.util.Map;
 
 /**
- * Options for {@code contacts().update(...)}. Addressed by id or email
- * (optionally audience-scoped). Only the fields you set are sent; passing
+ * Options for {@code contacts().update(...)}. Addressed by id or email. Only
+ * the fields you set are sent; passing
  * {@code null} to {@link Builder#firstName}/{@link Builder#lastName}/
  * {@link Builder#properties} clears that field, while leaving it unset leaves
  * it unchanged. That present-vs-null distinction is why the changed fields are
@@ -13,7 +13,6 @@ import java.util.Map;
  */
 public final class UpdateContactOptions {
 
-  private String audienceId;
   private String id;
   private String email;
   private final Map<String, Object> changes = new LinkedHashMap<>();
@@ -22,10 +21,6 @@ public final class UpdateContactOptions {
 
   public static Builder builder() {
     return new Builder();
-  }
-
-  public String getAudienceId() {
-    return audienceId;
   }
 
   public String getId() {
@@ -43,11 +38,6 @@ public final class UpdateContactOptions {
 
   public static final class Builder {
     private final UpdateContactOptions o = new UpdateContactOptions();
-
-    public Builder audienceId(String audienceId) {
-      o.audienceId = audienceId;
-      return this;
-    }
 
     public Builder id(String id) {
       o.id = id;

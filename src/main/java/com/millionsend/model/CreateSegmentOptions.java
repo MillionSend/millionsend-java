@@ -7,7 +7,6 @@ import com.fasterxml.jackson.annotation.JsonInclude;
 public final class CreateSegmentOptions {
 
   private String name;
-  private String audienceId;
   private SegmentFilter filter;
 
   private CreateSegmentOptions() {}
@@ -21,11 +20,6 @@ public final class CreateSegmentOptions {
 
     public Builder name(String name) {
       o.name = name;
-      return this;
-    }
-
-    public Builder audienceId(String audienceId) {
-      o.audienceId = audienceId;
       return this;
     }
 

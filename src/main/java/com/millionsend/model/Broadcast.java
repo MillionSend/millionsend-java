@@ -12,7 +12,6 @@ public final class Broadcast {
   private String object;
   private String id;
   private String name;
-  private String audienceId;
   private String segmentId;
   private String status;
   private String createdAt;
@@ -36,10 +35,6 @@ public final class Broadcast {
 
   public String getName() {
     return name;
-  }
-
-  public String getAudienceId() {
-    return audienceId;
   }
 
   public String getSegmentId() {

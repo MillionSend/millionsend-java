@@ -1,7 +1,6 @@
 package com.millionsend;
 
 import com.millionsend.core.HttpClient;
-import com.millionsend.services.Audiences;
 import com.millionsend.services.Batch;
 import com.millionsend.services.Broadcasts;
 import com.millionsend.services.Contacts;
@@ -35,7 +34,6 @@ public final class MillionSend {
 
   private final Emails emails;
   private final Batch batch;
-  private final Audiences audiences;
   private final Contacts contacts;
   private final Topics topics;
   private final Broadcasts broadcasts;
@@ -69,7 +67,6 @@ public final class MillionSend {
     HttpClient http = new HttpClient(key, url);
     this.emails = new Emails(http);
     this.batch = new Batch(http);
-    this.audiences = new Audiences(http);
     this.contacts = new Contacts(http);
     this.topics = new Topics(http);
     this.broadcasts = new Broadcasts(http);
@@ -82,10 +79,6 @@ public final class MillionSend {
 
   public Batch batch() {
     return batch;
-  }
-
-  public Audiences audiences() {
-    return audiences;
   }
 
   public Contacts contacts() {

@@ -16,9 +16,9 @@ import com.millionsend.model.UpdateContactOptions;
 import com.millionsend.model.UpdateContactTopicsOptions;
 
 /**
- * The {@code contacts} resource. Contacts are addressable by id or email (email
- * wins when both are set) and either audience-scoped or top-level. Per-contact
- * topic subscriptions live under {@link #topics()}.
+ * The {@code contacts} resource. Contacts are team-global and addressable by id
+ * or email (email wins when both are set). Per-contact topic subscriptions live
+ * under {@link #topics()}.
  */
 public final class Contacts {
 
@@ -35,13 +35,9 @@ public final class Contacts {
     return topics;
   }
 
-  /** POST /contacts or /audiences/{id}/contacts */
+  /** POST /contacts — 409 {@code validation_error} when the email already exists on the team. */
   public Id create(CreateContactOptions options) throws MillionSendException {
-    String path =
-        options.getAudienceId() != null
-            ? "/audiences/" + enc(options.getAudienceId()) + "/contacts"
-            : "/contacts";
-    return http.request("POST", path, options, null, null, new TypeReference<Id>() {});
+    return http.request("POST", "/contacts", options, null, null, new TypeReference<Id>() {});
   }
 
   /** GET a contact by a bare id. */
@@ -56,8 +52,7 @@ public final class Contacts {
 
   /** PATCH a contact. Only the fields set on {@code options} are sent (null clears). */
   public Id update(UpdateContactOptions options) throws MillionSendException {
-    String path =
-        contactPath(options.getAudienceId(), options.getId(), options.getEmail());
+    String path = contactPath(options.getId(), options.getEmail());
     return http.request("PATCH", path, options.getChanges(), null, null, new TypeReference<Id>() {});
   }
 
@@ -75,38 +70,23 @@ public final class Contacts {
 
   /** GET /contacts */
   public ListResponse<Contact> list() throws MillionSendException {
-    return list(null, null);
+    return list(null);
   }
 
   /** GET /contacts with pagination. */
   public ListResponse<Contact> list(ListOptions options) throws MillionSendException {
-    return list(null, options);
-  }
-
-  /** GET /audiences/{id}/contacts */
-  public ListResponse<Contact> list(String audienceId) throws MillionSendException {
-    return list(audienceId, null);
-  }
-
-  /** GET /audiences/{id}/contacts with pagination. */
-  public ListResponse<Contact> list(String audienceId, ListOptions options)
-      throws MillionSendException {
-    String path = audienceId != null ? "/audiences/" + enc(audienceId) + "/contacts" : "/contacts";
     return http.request(
-        "GET", path, null, options == null ? null : options.toQuery(), null,
+        "GET", "/contacts", null, options == null ? null : options.toQuery(), null,
         new TypeReference<ListResponse<Contact>>() {});
   }
 
   private static String contactPath(ContactAddress a) {
-    return contactPath(a.getAudienceId(), a.getId(), a.getEmail());
+    return contactPath(a.getId(), a.getEmail());
   }
 
-  /** Email wins over id; audience-scoped when an audience id is present. */
-  private static String contactPath(String audienceId, String id, String email) {
-    String key = enc(email != null ? email : (id != null ? id : ""));
-    return audienceId != null
-        ? "/audiences/" + enc(audienceId) + "/contacts/" + key
-        : "/contacts/" + key;
+  /** Email wins over id. */
+  private static String contactPath(String id, String email) {
+    return "/contacts/" + enc(email != null ? email : (id != null ? id : ""));
   }
 
   /** Per-contact topic subscriptions (opt in/out of a topic). */

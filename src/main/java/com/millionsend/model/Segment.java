@@ -9,7 +9,6 @@ public final class Segment {
   private String object;
   private String id;
   private String name;
-  private String audienceId;
   private SegmentFilter filter;
   private String createdAt;
   private Integer contactCount;
@@ -24,10 +23,6 @@ public final class Segment {
 
   public String getName() {
     return name;
-  }
-
-  public String getAudienceId() {
-    return audienceId;
   }
 
   public SegmentFilter getFilter() {

@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.1.0</version>
+  <version>0.2.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.1.0'
+implementation 'com.millionsend:millionsend-java:0.2.0'
 ```
 
 Requires Java 11+.
@@ -97,23 +97,20 @@ Send options are camelCase and mapped to the wire: `replyTo` → `reply_to`,
 `scheduledAt` → `scheduled_at`. `to`/`cc`/`bcc`/`replyTo` accept one or more
 addresses (`.to("a@x.dev")` or `.to(List.of(...))`).
 
-### Audiences & contacts
+### Contacts
+
+Contacts are team-global — one list per team, no audiences.
 
 ```java
-Audience audience = ms.audiences().create(CreateAudienceOptions.builder().name("Registered users").build());
-ms.audiences().list(ListOptions.builder().limit(20).after(cursor).build());
-ms.audiences().get(id);
-ms.audiences().remove(id);
-
 ms.contacts().create(CreateContactOptions.builder()
-    .audienceId(audienceId).email("ada@acme.dev").firstName("Ada")
-    .properties(Map.of("plan", "pro")).build());
-ms.contacts().get(ContactAddress.builder().audienceId(audienceId).email("ada@acme.dev").build());
+    .email("ada@acme.dev").firstName("Ada")
+    .properties(Map.of("plan", "pro")).build());   // 409 validation_error on duplicate email
+ms.contacts().get(ContactAddress.email("ada@acme.dev"));
 ms.contacts().get(contactId);                                       // bare id shorthand
 ms.contacts().update(UpdateContactOptions.builder()
     .id(id).unsubscribed(true).firstName(null).build());            // null clears a field
 ms.contacts().remove(ContactAddress.email("ada@acme.dev"));
-ms.contacts().list(audienceId, ListOptions.builder().limit(50).build());
+ms.contacts().list(ListOptions.builder().limit(50).build());
 
 // Topic subscriptions (granular unsubscribe)
 ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
@@ -121,7 +118,7 @@ ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
 ```
 
 Addressing a contact: pass a bare id string, or a `ContactAddress` by id or
-email (email wins when both are set), optionally scoped to an audience.
+email (email wins when both are set).
 
 ### Topics
 
@@ -137,7 +134,8 @@ ms.topics().remove(id);
 
 ```java
 Id b = ms.broadcasts().create(CreateBroadcastOptions.builder()
-    .audienceId(audienceId).from("Acme <news@acme.dev>").subject("Launch")
+    .from("Acme <news@acme.dev>").subject("Launch")
+    .segmentId(segmentId)          // optional; also .topicId(...) — neither sends to all contacts
     .html("<p>Hi {{{FIRST_NAME|there}}}</p>").build());
 ms.broadcasts().list();
 ms.broadcasts().get(id);
@@ -150,12 +148,12 @@ ms.broadcasts().remove(id);    // draft only
 
 ### Segments (MillionSend extension)
 
-Dynamic segments are a saved filter over an audience's contacts — a MillionSend
-superset with no Resend equivalent (served under `/segments2`).
+Dynamic segments are a saved filter over your contacts — a MillionSend
+superset with no Resend equivalent.
 
 ```java
 ms.segments().create(CreateSegmentOptions.builder()
-    .name("Pro plan").audienceId(audienceId)
+    .name("Pro plan")
     .filter(SegmentFilter.builder().match("all")
         .condition(new SegmentCondition("property:plan", "equals", "pro")).build())
     .build());
@@ -178,8 +176,8 @@ Accessor and method names match (`resend.emails().send(...)` →
 `ms.emails().send(...)`). Notes:
 
 - **Domains and API keys** are managed in the MillionSend dashboard, not via the API, so there are no `.domains()`/`.apiKeys()` resources here.
+- **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
-- Resend's `.segments()` is an alias of audiences; MillionSend's `.segments()` is the distinct dynamic-filter feature. Use `.audiences()` for a straight port.
 
 ## Build & test
 

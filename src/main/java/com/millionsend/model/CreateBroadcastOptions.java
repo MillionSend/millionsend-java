@@ -10,7 +10,6 @@ import java.util.List;
 public final class CreateBroadcastOptions {
 
   private String name;
-  private String audienceId;
   private String segmentId;
   private String from;
   private String subject;
@@ -30,11 +29,6 @@ public final class CreateBroadcastOptions {
 
     public Builder name(String name) {
       o.name = name;
-      return this;
-    }
-
-    public Builder audienceId(String audienceId) {
-      o.audienceId = audienceId;
       return this;
     }
 

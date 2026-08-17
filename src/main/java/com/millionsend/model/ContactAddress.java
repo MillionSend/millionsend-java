@@ -1,13 +1,12 @@
 package com.millionsend.model;
 
 /**
- * Addresses a contact by id or email, optionally scoped to an audience. Email
- * wins over id when both are set. A bare-string id is the common case, so the
- * services also accept a plain {@code String}.
+ * Addresses a contact by id or email. Email wins over id when both are set. A
+ * bare-string id is the common case, so the services also accept a plain
+ * {@code String}.
  */
 public final class ContactAddress {
 
-  private String audienceId;
   private String id;
   private String email;
 
@@ -17,18 +16,14 @@ public final class ContactAddress {
     return new Builder();
   }
 
-  /** A top-level address by id (the bare-string shorthand). */
+  /** An address by id (the bare-string shorthand). */
   public static ContactAddress id(String id) {
     return builder().id(id).build();
   }
 
-  /** A top-level address by email. */
+  /** An address by email. */
   public static ContactAddress email(String email) {
     return builder().email(email).build();
-  }
-
-  public String getAudienceId() {
-    return audienceId;
   }
 
   public String getId() {
@@ -41,11 +36,6 @@ public final class ContactAddress {
 
   public static final class Builder {
     private final ContactAddress o = new ContactAddress();
-
-    public Builder audienceId(String audienceId) {
-      o.audienceId = audienceId;
-      return this;
-    }
 
     public Builder id(String id) {
       o.id = id;

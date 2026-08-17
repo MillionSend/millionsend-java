@@ -2,7 +2,7 @@ package com.millionsend.model;
 
 /**
  * The {@code { object, id, deleted }} shape returned by the remove operations
- * (audiences, topics, broadcasts, segments) and by the email/broadcast cancels
+ * (topics, broadcasts, segments) and by the email/broadcast cancels
  * (which populate {@code object} and {@code id} only).
  */
 public final class DeletedResponse {

@@ -14,7 +14,7 @@ import com.millionsend.model.UpdateSegmentOptions;
 
 /**
  * The {@code segments} resource — MillionSend dynamic segments (a saved filter
- * over an audience's contacts). No Resend equivalent; served under /segments2.
+ * over the team's contacts). No Resend equivalent.
  */
 public final class Segments {
 
@@ -24,39 +24,39 @@ public final class Segments {
     this.http = http;
   }
 
-  /** POST /segments2 */
+  /** POST /segments */
   public Segment create(CreateSegmentOptions options) throws MillionSendException {
-    return http.request("POST", "/segments2", options, null, null, new TypeReference<Segment>() {});
+    return http.request("POST", "/segments", options, null, null, new TypeReference<Segment>() {});
   }
 
-  /** GET /segments2/{id} — includes a live {@code contactCount}. */
+  /** GET /segments/{id} — includes a live {@code contactCount}. */
   public Segment get(String id) throws MillionSendException {
     return http.request(
-        "GET", "/segments2/" + enc(id), null, null, null, new TypeReference<Segment>() {});
+        "GET", "/segments/" + enc(id), null, null, null, new TypeReference<Segment>() {});
   }
 
-  /** GET /segments2 */
+  /** GET /segments */
   public ListResponse<Segment> list() throws MillionSendException {
     return list(null);
   }
 
-  /** GET /segments2 with pagination. */
+  /** GET /segments with pagination. */
   public ListResponse<Segment> list(ListOptions options) throws MillionSendException {
     return http.request(
-        "GET", "/segments2", null, options == null ? null : options.toQuery(), null,
+        "GET", "/segments", null, options == null ? null : options.toQuery(), null,
         new TypeReference<ListResponse<Segment>>() {});
   }
 
-  /** PATCH /segments2/{id} */
+  /** PATCH /segments/{id} */
   public Segment update(String id, UpdateSegmentOptions options) throws MillionSendException {
     return http.request(
-        "PATCH", "/segments2/" + enc(id), options, null, null, new TypeReference<Segment>() {});
+        "PATCH", "/segments/" + enc(id), options, null, null, new TypeReference<Segment>() {});
   }
 
-  /** DELETE /segments2/{id} */
+  /** DELETE /segments/{id} */
   public DeletedResponse remove(String id) throws MillionSendException {
     return http.request(
-        "DELETE", "/segments2/" + enc(id), null, null, null,
+        "DELETE", "/segments/" + enc(id), null, null, null,
         new TypeReference<DeletedResponse>() {});
   }
 }

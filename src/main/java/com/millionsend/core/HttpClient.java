@@ -27,7 +27,7 @@ import java.util.Map;
 public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
-  public static final String VERSION = "0.1.0";
+  public static final String VERSION = "0.2.0";
 
   private final String apiKey;
   private final String baseUrl;

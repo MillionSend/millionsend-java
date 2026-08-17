@@ -1,17 +1,12 @@
 package com.millionsend.model;
 
-import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.Map;
 
-/**
- * Options for {@code contacts().create(...)}. {@code audienceId} selects the
- * path (audience-scoped vs top-level) and is never part of the body.
- */
+/** Options for {@code contacts().create(...)}. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class CreateContactOptions {
 
-  @JsonIgnore private String audienceId;
   private String email;
   private String firstName;
   private String lastName;
@@ -24,17 +19,8 @@ public final class CreateContactOptions {
     return new Builder();
   }
 
-  public String getAudienceId() {
-    return audienceId;
-  }
-
   public static final class Builder {
     private final CreateContactOptions o = new CreateContactOptions();
-
-    public Builder audienceId(String audienceId) {
-      o.audienceId = audienceId;
-      return this;
-    }
 
     public Builder email(String email) {
       o.email = email;

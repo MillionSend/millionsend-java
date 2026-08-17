@@ -7,7 +7,6 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.millionsend.model.ContactAddress;
-import com.millionsend.model.CreateAudienceOptions;
 import com.millionsend.model.CreateBroadcastOptions;
 import com.millionsend.model.CreateContactOptions;
 import com.millionsend.model.CreateEmailOptions;
@@ -82,36 +81,13 @@ class ResourcesTest {
   }
 
   @Test
-  void audiences() throws Exception {
-    ms.audiences().create(CreateAudienceOptions.builder().name("Users").build());
-    assertEquals("POST", server.method);
-    assertEquals("/audiences", server.path);
-    assertEquals("Users", body().get("name").asText());
-
-    ms.audiences().get("a1");
-    assertEquals("/audiences/a1", server.path);
-
-    ms.audiences().list(ListOptions.builder().limit(10).build());
-    assertEquals("/audiences", server.path);
-    assertEquals("limit=10", server.query);
-
-    ms.audiences().remove("a1");
-    assertEquals("DELETE", server.method);
-    assertEquals("/audiences/a1", server.path);
-  }
-
-  @Test
   void contactsCreate() throws Exception {
     ms.contacts()
-        .create(
-            CreateContactOptions.builder().audienceId("a1").email("c@x.dev").firstName("Ada").build());
-    assertEquals("/audiences/a1/contacts", server.path);
+        .create(CreateContactOptions.builder().email("c@x.dev").firstName("Ada").build());
+    assertEquals("POST", server.method);
+    assertEquals("/contacts", server.path);
     assertEquals("c@x.dev", body().get("email").asText());
     assertEquals("Ada", body().get("first_name").asText());
-    assertFalse(body().has("audience_id"));
-
-    ms.contacts().create(CreateContactOptions.builder().email("c@x.dev").build());
-    assertEquals("/contacts", server.path);
   }
 
   @Test
@@ -123,9 +99,6 @@ class ResourcesTest {
     // The raw (undecoded) path proves the client percent-encoded the segment.
     assertEquals("/contacts/c%40x.dev", server.rawPath);
     assertEquals("/contacts/c@x.dev", server.path);
-
-    ms.contacts().get(ContactAddress.builder().audienceId("a1").id("c1").build());
-    assertEquals("/audiences/a1/contacts/c1", server.path);
   }
 
   @Test
@@ -140,12 +113,12 @@ class ResourcesTest {
   }
 
   @Test
-  void contactsRemoveAndScopedList() throws Exception {
+  void contactsRemoveAndList() throws Exception {
     ms.contacts().remove(ContactAddress.email("c@x.dev"));
     assertEquals("DELETE", server.method);
 
-    ms.contacts().list("a1", ListOptions.builder().after("cur").build());
-    assertEquals("/audiences/a1/contacts", server.path);
+    ms.contacts().list(ListOptions.builder().after("cur").build());
+    assertEquals("/contacts", server.path);
     assertEquals("after=cur", server.query);
   }
 
@@ -167,14 +140,15 @@ class ResourcesTest {
     ms.broadcasts()
         .create(
             CreateBroadcastOptions.builder()
-                .audienceId("a1")
+                .segmentId("s1")
                 .from("a@x.dev")
                 .subject("News")
                 .html("<p>hi</p>")
                 .build());
     assertEquals("/broadcasts", server.path);
-    assertEquals("a1", body().get("audience_id").asText());
+    assertEquals("s1", body().get("segment_id").asText());
     assertEquals("News", body().get("subject").asText());
+    assertFalse(body().has("audience_id"));
 
     ms.broadcasts().get("b1");
     assertEquals("/broadcasts/b1", server.path);
@@ -219,21 +193,21 @@ class ResourcesTest {
   void segments() throws Exception {
     SegmentFilter filter =
         SegmentFilter.builder().match("all").condition(new SegmentCondition("email", "is_set")).build();
-    ms.segments().create(CreateSegmentOptions.builder().name("Active").audienceId("a1").filter(filter).build());
-    assertEquals("/segments2", server.path);
-    assertEquals("a1", body().get("audience_id").asText());
+    ms.segments().create(CreateSegmentOptions.builder().name("Active").filter(filter).build());
+    assertEquals("/segments", server.path);
     assertEquals("all", body().get("filter").get("match").asText());
+    assertFalse(body().has("audience_id"));
 
     ms.segments().get("s1");
-    assertEquals("/segments2/s1", server.path);
+    assertEquals("/segments/s1", server.path);
 
     ms.segments().list(ListOptions.builder().before("cur").build());
-    assertEquals("/segments2", server.path);
+    assertEquals("/segments", server.path);
     assertEquals("before=cur", server.query);
 
     ms.segments().update("s1", UpdateSegmentOptions.builder().name("Renamed").build());
     assertEquals("PATCH", server.method);
-    assertEquals("/segments2/s1", server.path);
+    assertEquals("/segments/s1", server.path);
 
     ms.segments().remove("s1");
     assertEquals("DELETE", server.method);
