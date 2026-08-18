@@ -15,6 +15,7 @@ import java.net.URLEncoder;
 import java.net.http.HttpRequest;
 import java.net.http.HttpResponse;
 import java.nio.charset.StandardCharsets;
+import java.time.Duration;
 import java.util.Map;
 
 /**
@@ -28,6 +29,8 @@ public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
   public static final String VERSION = "0.2.0";
+  private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
+  private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
   private final String apiKey;
   private final String baseUrl;
@@ -39,7 +42,8 @@ public final class HttpClient {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replaceAll("/+$", "");
     this.userAgent = "millionsend-java/" + VERSION;
-    this.http = java.net.http.HttpClient.newHttpClient();
+    this.http =
+        java.net.http.HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
     // Default serialization inclusion stays ALWAYS so an explicit null in a
     // PATCH body (a contact field being cleared) reaches the wire; request
     // option classes carry @JsonInclude(NON_NULL) to drop their unset fields.
@@ -66,6 +70,7 @@ public final class HttpClient {
 
     HttpRequest.Builder rb =
         HttpRequest.newBuilder(URI.create(baseUrl + path + queryString(query)))
+            .timeout(REQUEST_TIMEOUT)
             .header("Authorization", "Bearer " + apiKey)
             .header("Accept", "application/json")
             .header("User-Agent", userAgent);
