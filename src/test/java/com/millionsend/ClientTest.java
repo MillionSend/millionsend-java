@@ -32,6 +32,18 @@ class ClientTest {
   }
 
   @Test
+  void refusesNonLoopbackHttpUnlessAllowed() {
+    IllegalArgumentException e =
+        assertThrows(
+            IllegalArgumentException.class,
+            () -> new MillionSend("ms_test", "http://mail.example.com"));
+    assertTrue(e.getMessage().contains("allowInsecureHttp"));
+    new MillionSend("ms_test", "http://mail.example.com", true);
+    new MillionSend("ms_test", "http://localhost:3001");
+    new MillionSend("ms_test", "http://127.0.0.1:3001");
+  }
+
+  @Test
   void setsAuthAcceptUserAgentAndContentType() throws Exception {
     try (MockServer server = new MockServer()) {
       server.client().emails().send(email());

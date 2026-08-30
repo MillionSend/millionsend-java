@@ -55,6 +55,14 @@ public final class MillionSend {
    *     then fall back to {@code http://localhost:3001}
    */
   public MillionSend(String apiKey, String baseUrl) {
+    this(apiKey, baseUrl, false);
+  }
+
+  /**
+   * @param allowInsecureHttp accept a plain {@code http://} base URL on a non-loopback host;
+   *     off by default because the API key travels as a bearer header
+   */
+  public MillionSend(String apiKey, String baseUrl, boolean allowInsecureHttp) {
     String key = apiKey != null ? apiKey : System.getenv("MILLIONSEND_API_KEY");
     if (key == null || key.isEmpty()) {
       throw new IllegalArgumentException(
@@ -64,7 +72,7 @@ public final class MillionSend {
     if (url == null || url.isEmpty()) {
       url = DEFAULT_BASE_URL;
     }
-    HttpClient http = new HttpClient(key, url);
+    HttpClient http = new HttpClient(key, url, allowInsecureHttp);
     this.emails = new Emails(http);
     this.batch = new Batch(http);
     this.contacts = new Contacts(http);

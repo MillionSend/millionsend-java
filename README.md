@@ -57,10 +57,12 @@ try {
 new MillionSend();                       // apiKey + baseUrl from the environment
 new MillionSend(apiKey);                 // baseUrl from MILLIONSEND_BASE_URL or the default
 new MillionSend(apiKey, baseUrl);        // explicit base URL
+new MillionSend(apiKey, baseUrl, true);  // also accept a non-loopback http:// base URL
 ```
 
 - `apiKey` falls back to `MILLIONSEND_API_KEY`. A missing key throws `IllegalArgumentException` at construction.
 - `baseUrl` falls back to `MILLIONSEND_BASE_URL`, then `http://localhost:3001`. MillionSend is self-hosted, so **set this to your deployment in production.**
+- Plain `http://` is only accepted for loopback hosts (`localhost`, `127.0.0.1`, `::1`); any other `http://` URL throws `IllegalArgumentException` at construction, since the API key is sent as a bearer header. Pass `allowInsecureHttp = true` (third constructor argument) to talk to a non-TLS instance elsewhere (e.g. inside a private network).
 
 ## Error handling
 

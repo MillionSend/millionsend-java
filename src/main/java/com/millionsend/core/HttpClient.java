@@ -28,7 +28,7 @@ import java.util.Map;
 public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
-  public static final String VERSION = "0.2.0";
+  public static final String VERSION = "0.2.1";
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
@@ -39,8 +39,19 @@ public final class HttpClient {
   private final ObjectMapper mapper;
 
   public HttpClient(String apiKey, String baseUrl) {
+    this(apiKey, baseUrl, false);
+  }
+
+  public HttpClient(String apiKey, String baseUrl, boolean allowInsecureHttp) {
     this.apiKey = apiKey;
     this.baseUrl = baseUrl.replaceAll("/+$", "");
+    // The API key travels as a bearer header, so plain http is loopback-only by default.
+    if (!allowInsecureHttp && isInsecureHttpUrl(this.baseUrl)) {
+      throw new IllegalArgumentException(
+          "Refusing to send the API key over plain http to "
+              + this.baseUrl
+              + ". Use https, or construct with allowInsecureHttp = true.");
+    }
     this.userAgent = "millionsend-java/" + VERSION;
     this.http =
         java.net.http.HttpClient.newBuilder().connectTimeout(CONNECT_TIMEOUT).build();
@@ -52,6 +63,21 @@ public final class HttpClient {
             .setPropertyNamingStrategy(PropertyNamingStrategies.SNAKE_CASE)
             .setVisibility(PropertyAccessor.FIELD, Visibility.ANY)
             .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false);
+  }
+
+  /** True for an http:// URL whose host is not loopback. Unparseable URLs are left to the transport. */
+  static boolean isInsecureHttpUrl(String url) {
+    URI uri;
+    try {
+      uri = URI.create(url);
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
+    if (!"http".equalsIgnoreCase(uri.getScheme())) {
+      return false;
+    }
+    String host = uri.getHost() == null ? "" : uri.getHost().toLowerCase();
+    return !host.equals("localhost") && !host.equals("[::1]") && !host.startsWith("127.");
   }
 
   /** Percent-encode one path segment (id or email). */

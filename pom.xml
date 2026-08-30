@@ -21,7 +21,7 @@
   </licenses>
 
   <scm>
-    <connection>scm:git:git://github.com/MillionSend/millionsend.git</connection>
+    <connection>scm:git:https://github.com/MillionSend/millionsend-java.git</connection>
     <url>https://github.com/MillionSend/millionsend-java</url>
   </scm>
 
