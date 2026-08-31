@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.2.0</version>
+  <version>0.3.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.2.0'
+implementation 'com.millionsend:millionsend-java:0.3.0'
 ```
 
 Requires Java 11+.
@@ -90,7 +90,8 @@ try {
 ```java
 ms.emails().send(options);                 // POST /emails
 ms.emails().send(options, idempotencyKey); // with an Idempotency-Key
-ms.emails().get(id);                        // GET /emails/{id}
+ms.emails().get(id);                        // GET /emails/{id} — includes a nullable score (0-10)
+ms.emails().getInsights(id);                // GET /emails/{id}/insights (404 not_found until computed)
 ms.emails().cancel(id);                     // POST /emails/{id}/cancel (scheduled only)
 ms.batch().send(List.of(a, b), key);        // POST /emails/batch (up to 100)
 ```
@@ -164,6 +165,20 @@ ms.segments().list();
 ms.segments().update(id, UpdateSegmentOptions.builder().name("Pro tier").build());
 ms.segments().remove(id);
 ```
+
+### Deliverability (MillionSend extension)
+
+The account deliverability score over the trailing 30 days.
+
+```java
+DeliverabilityReport report = ms.deliverability().get();
+report.getScore();            // Double, 0-10 — null until there is enough data
+report.getBand();             // "excellent" | "good" | "needs_attention" | "at_risk" | null
+report.getGuardrailStatus();  // "ok" | "warning" | "paused"
+```
+
+Bands, check severities/statuses and the guardrail status are plain strings
+(the server may add values over time), and check ids are an open set.
 
 ## Migrating from Resend
 

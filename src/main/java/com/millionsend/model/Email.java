@@ -19,6 +19,7 @@ public final class Email {
   private String scheduledAt;
   private String messageId;
   private String lastEvent;
+  private Double score;
 
   public String getObject() {
     return object;
@@ -74,5 +75,10 @@ public final class Email {
 
   public String getLastEvent() {
     return lastEvent;
+  }
+
+  /** Best-practice score (0-10, one decimal), or {@code null} when the email has no insights. */
+  public Double getScore() {
+    return score;
   }
 }

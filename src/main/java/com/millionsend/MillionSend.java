@@ -4,6 +4,7 @@ import com.millionsend.core.HttpClient;
 import com.millionsend.services.Batch;
 import com.millionsend.services.Broadcasts;
 import com.millionsend.services.Contacts;
+import com.millionsend.services.Deliverability;
 import com.millionsend.services.Emails;
 import com.millionsend.services.Segments;
 import com.millionsend.services.Topics;
@@ -38,6 +39,7 @@ public final class MillionSend {
   private final Topics topics;
   private final Broadcasts broadcasts;
   private final Segments segments;
+  private final Deliverability deliverability;
 
   /** Reads the API key from {@code MILLIONSEND_API_KEY} and the base URL from the environment. */
   public MillionSend() {
@@ -79,6 +81,7 @@ public final class MillionSend {
     this.topics = new Topics(http);
     this.broadcasts = new Broadcasts(http);
     this.segments = new Segments(http);
+    this.deliverability = new Deliverability(http);
   }
 
   public Emails emails() {
@@ -103,5 +106,9 @@ public final class MillionSend {
 
   public Segments segments() {
     return segments;
+  }
+
+  public Deliverability deliverability() {
+    return deliverability;
   }
 }

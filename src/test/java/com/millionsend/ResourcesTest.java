@@ -67,6 +67,19 @@ class ResourcesTest {
     ms.emails().cancel("e1");
     assertEquals("POST", server.method);
     assertEquals("/emails/e1/cancel", server.path);
+
+    server.responseBody = InsightsTest.INSIGHTS_JSON;
+    ms.emails().getInsights("e1");
+    assertEquals("GET", server.method);
+    assertEquals("/emails/e1/insights", server.path);
+  }
+
+  @Test
+  void deliverability() throws Exception {
+    server.responseBody = InsightsTest.DELIVERABILITY_JSON;
+    ms.deliverability().get();
+    assertEquals("GET", server.method);
+    assertEquals("/deliverability", server.path);
   }
 
   @Test

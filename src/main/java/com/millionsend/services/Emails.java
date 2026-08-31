@@ -9,8 +9,9 @@ import com.millionsend.model.CreateEmailOptions;
 import com.millionsend.model.CreateEmailResponse;
 import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Email;
+import com.millionsend.model.EmailInsights;
 
-/** The {@code emails} resource: send, get, cancel. */
+/** The {@code emails} resource: send, get, insights, cancel. */
 public final class Emails {
 
   private final HttpClient http;
@@ -45,6 +46,17 @@ public final class Emails {
   /** GET /emails/{id} */
   public Email get(String id) throws MillionSendException {
     return http.request("GET", "/emails/" + enc(id), null, null, null, new TypeReference<Email>() {});
+  }
+
+  /**
+   * GET /emails/{id}/insights — the pre-send best-practice report. The API
+   * returns a 404 {@code not_found} when the id is unknown or insights are not
+   * available for the email yet.
+   */
+  public EmailInsights getInsights(String id) throws MillionSendException {
+    return http.request(
+        "GET", "/emails/" + enc(id) + "/insights", null, null, null,
+        new TypeReference<EmailInsights>() {});
   }
 
   /** POST /emails/{id}/cancel — scheduled, unsent emails only. */
