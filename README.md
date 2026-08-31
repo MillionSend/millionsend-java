@@ -206,6 +206,22 @@ mvn verify        # + build the jar
 The integration test in `E2ETest` runs only when `MILLIONSEND_API_KEY` is set
 (and `MILLIONSEND_BASE_URL` if not localhost); it is skipped otherwise.
 
+## Releasing
+
+`Release` (workflow_dispatch) publishes the current `main` to Maven Central
+through the Central Portal with `mvn -P release deploy` (sources + javadoc
+jars, GPG signatures, auto-publish, waits until the version is live). It
+needs four repository secrets:
+
+| Secret | Value |
+| --- | --- |
+| `CENTRAL_TOKEN_USERNAME` / `CENTRAL_TOKEN_PASSWORD` | A [central.sonatype.com](https://central.sonatype.com) user token (Account → Generate User Token) |
+| `MAVEN_GPG_PRIVATE_KEY` | ASCII-armored private signing key (`gpg --armor --export-secret-keys <id>`) |
+| `MAVEN_GPG_PASSPHRASE` | Its passphrase |
+
+The public half of the signing key must be on a keyserver Central checks:
+`gpg --keyserver keyserver.ubuntu.com --send-keys <id>`.
+
 ## License
 
 MIT
