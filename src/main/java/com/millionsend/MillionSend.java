@@ -1,13 +1,20 @@
 package com.millionsend;
 
 import com.millionsend.core.HttpClient;
+import com.millionsend.services.ApiKeys;
 import com.millionsend.services.Batch;
 import com.millionsend.services.Broadcasts;
+import com.millionsend.services.ContactProperties;
 import com.millionsend.services.Contacts;
 import com.millionsend.services.Deliverability;
+import com.millionsend.services.Domains;
 import com.millionsend.services.Emails;
 import com.millionsend.services.Segments;
+import com.millionsend.services.Suppressions;
+import com.millionsend.services.Templates;
 import com.millionsend.services.Topics;
+import com.millionsend.services.Usage;
+import com.millionsend.services.Webhooks;
 
 /**
  * The MillionSend client. Construct once and reuse.
@@ -40,6 +47,13 @@ public final class MillionSend {
   private final Broadcasts broadcasts;
   private final Segments segments;
   private final Deliverability deliverability;
+  private final Suppressions suppressions;
+  private final Domains domains;
+  private final Webhooks webhooks;
+  private final ApiKeys apiKeys;
+  private final Templates templates;
+  private final ContactProperties contactProperties;
+  private final Usage usage;
 
   /** Reads the API key from {@code MILLIONSEND_API_KEY} and the base URL from the environment. */
   public MillionSend() {
@@ -82,6 +96,13 @@ public final class MillionSend {
     this.broadcasts = new Broadcasts(http);
     this.segments = new Segments(http);
     this.deliverability = new Deliverability(http);
+    this.suppressions = new Suppressions(http);
+    this.domains = new Domains(http);
+    this.webhooks = new Webhooks(http);
+    this.apiKeys = new ApiKeys(http);
+    this.templates = new Templates(http);
+    this.contactProperties = new ContactProperties(http);
+    this.usage = new Usage(http);
   }
 
   public Emails emails() {
@@ -110,5 +131,34 @@ public final class MillionSend {
 
   public Deliverability deliverability() {
     return deliverability;
+  }
+
+  public Suppressions suppressions() {
+    return suppressions;
+  }
+
+  public Domains domains() {
+    return domains;
+  }
+
+  public Webhooks webhooks() {
+    return webhooks;
+  }
+
+  public ApiKeys apiKeys() {
+    return apiKeys;
+  }
+
+  public Templates templates() {
+    return templates;
+  }
+
+  public ContactProperties contactProperties() {
+    return contactProperties;
+  }
+
+  /** MillionSend extension: plan, limits and today's send count. */
+  public Usage usage() {
+    return usage;
   }
 }

@@ -2,23 +2,22 @@ package com.millionsend.model;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 
-/** Options for {@code topics().create(...)}. */
+/** Options for {@code topics().update(...)}. {@code defaultSubscription} is immutable after creation. */
 @JsonInclude(JsonInclude.Include.NON_NULL)
-public final class CreateTopicOptions {
+public final class UpdateTopicOptions {
 
   private String name;
   private String description;
-  private Subscription defaultSubscription;
   private String visibility;
 
-  private CreateTopicOptions() {}
+  private UpdateTopicOptions() {}
 
   public static Builder builder() {
     return new Builder();
   }
 
   public static final class Builder {
-    private final CreateTopicOptions o = new CreateTopicOptions();
+    private final UpdateTopicOptions o = new UpdateTopicOptions();
 
     public Builder name(String name) {
       o.name = name;
@@ -30,18 +29,13 @@ public final class CreateTopicOptions {
       return this;
     }
 
-    public Builder defaultSubscription(Subscription defaultSubscription) {
-      o.defaultSubscription = defaultSubscription;
-      return this;
-    }
-
-    /** {@code private} (default) or {@code public}. */
+    /** {@code private} or {@code public}. */
     public Builder visibility(String visibility) {
       o.visibility = visibility;
       return this;
     }
 
-    public CreateTopicOptions build() {
+    public UpdateTopicOptions build() {
       return o;
     }
   }

@@ -19,7 +19,7 @@ import java.time.Duration;
 import java.util.Map;
 
 /**
- * The transport layer: builds requests, applies auth/idempotency headers, maps
+ * The transport layer: builds requests, applies auth and per-request headers, maps
  * camelCase SDK types to the snake_case wire (via Jackson), and turns any
  * non-2xx into a {@link MillionSendException}. One instance is shared by every
  * service. Uses the JDK's {@link java.net.http.HttpClient} — no extra HTTP
@@ -28,7 +28,7 @@ import java.util.Map;
 public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
-  public static final String VERSION = "0.3.0";
+  public static final String VERSION = "0.4.0";
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
@@ -90,7 +90,7 @@ public final class HttpClient {
       String path,
       Object body,
       Map<String, String> query,
-      String idempotencyKey,
+      RequestOptions options,
       TypeReference<T> returnType)
       throws MillionSendException {
 
@@ -108,9 +108,17 @@ public final class HttpClient {
     } else {
       rb.method(method, HttpRequest.BodyPublishers.noBody());
     }
-    // Idempotency is POST-only on the wire.
-    if (idempotencyKey != null && "POST".equals(method)) {
-      rb.header("Idempotency-Key", idempotencyKey);
+    if (options != null) {
+      // Idempotency is POST-only on the wire.
+      if (options.getIdempotencyKey() != null && "POST".equals(method)) {
+        rb.header("Idempotency-Key", options.getIdempotencyKey());
+      }
+      if (options.getBatchValidation() != null) {
+        rb.header("x-batch-validation", options.getBatchValidation().getValue());
+      }
+      for (Map.Entry<String, String> h : options.getAdditionalHeaders().entrySet()) {
+        rb.header(h.getKey(), h.getValue());
+      }
     }
 
     HttpResponse<String> response;

@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.3.0</version>
+  <version>0.4.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.3.0'
+implementation 'com.millionsend:millionsend-java:0.4.0'
 ```
 
 Requires Java 11+.
@@ -85,20 +85,57 @@ try {
 
 ## Resources
 
+Every request field you set reaches the wire — nothing is dropped client-side.
+Fields the server does not support yet (`template` on send, `from`/`replyTo` on
+templates) are forwarded as-is and answered with a 422.
+
+### Request options
+
+Any `send`/`create` accepts a `RequestOptions` (mirroring `resend-java`):
+
+```java
+import com.millionsend.core.RequestOptions;
+import com.millionsend.model.BatchValidation;
+
+RequestOptions opts = RequestOptions.builder()
+    .idempotencyKey("order-123")                   // Idempotency-Key (setIdempotencyKey also works)
+    .batchValidation(BatchValidation.PERMISSIVE)   // x-batch-validation on the batch endpoints
+    .add("X-Trace", "abc")                         // any extra header
+    .build();
+ms.emails().send(options, opts);
+ms.emails().send(options, "order-123");            // the plain idempotency-key overload still works
+```
+
 ### Emails
 
 ```java
-ms.emails().send(options);                 // POST /emails
-ms.emails().send(options, idempotencyKey); // with an Idempotency-Key
+ms.emails().send(options);                  // POST /emails
+ms.emails().send(options, requestOptions);  // with an Idempotency-Key / extra headers
 ms.emails().get(id);                        // GET /emails/{id} — includes a nullable score (0-10)
+ms.emails().list(ListOptions.builder().limit(50).build()); // GET /emails
+ms.emails().update(id, UpdateEmailOptions.builder().scheduledAt("2026-09-01T09:00:00Z").build());
 ms.emails().getInsights(id);                // GET /emails/{id}/insights (404 not_found until computed)
 ms.emails().cancel(id);                     // POST /emails/{id}/cancel (scheduled only)
-ms.batch().send(List.of(a, b), key);        // POST /emails/batch (up to 100)
+ms.emails().remove(id);                     // DELETE /emails/{id} (MillionSend extension)
 ```
 
 Send options are camelCase and mapped to the wire: `replyTo` → `reply_to`,
-`scheduledAt` → `scheduled_at`. `to`/`cc`/`bcc`/`replyTo` accept one or more
-addresses (`.to("a@x.dev")` or `.to(List.of(...))`).
+`scheduledAt` → `scheduled_at`, `topicId` → `topic_id`. `to`/`cc`/`bcc`/`replyTo`
+accept one or more addresses. Also available: `.tag(new Tag(name, value))`,
+`.attachment(Attachment.builder().fileName("a.pdf").content(base64).build())`
+(or `.path(url)`, plus `contentType`/`contentId`), `.header(name, value)` and
+`.template(...)` (forwarded; the server answers 422 — send `html`/`text`).
+
+### Batch
+
+```java
+CreateBatchEmailsResponse res = ms.batch().send(List.of(a, b),
+    RequestOptions.builder().idempotencyKey(key).batchValidation(BatchValidation.PERMISSIVE).build());
+res.getData();    // accepted ids
+res.getErrors();  // permissive mode: [{ index, message }] for rejected items; null when all accepted
+```
+
+Strict mode (the default) rejects the whole batch on the first invalid item.
 
 ### Contacts
 
@@ -107,29 +144,56 @@ Contacts are team-global — one list per team, no audiences.
 ```java
 ms.contacts().create(CreateContactOptions.builder()
     .email("ada@acme.dev").firstName("Ada")
-    .properties(Map.of("plan", "pro")).build());   // 409 validation_error on duplicate email
+    .properties(Map.of("plan", "pro"))
+    .segment(segmentId)                              // initial segment membership
+    .topic(topicId, Subscription.OPT_OUT)            // initial topic choice
+    .build());                                       // 409 validation_error on duplicate email
 ms.contacts().get(ContactAddress.email("ada@acme.dev"));
-ms.contacts().get(contactId);                                       // bare id shorthand
+ms.contacts().get(contactId);                        // bare id shorthand
 ms.contacts().update(UpdateContactOptions.builder()
-    .id(id).unsubscribed(true).firstName(null).build());            // null clears a field
+    .id(id).unsubscribed(true).firstName(null).build()); // null clears a field
 ms.contacts().remove(ContactAddress.email("ada@acme.dev"));
 ms.contacts().list(ListOptions.builder().limit(50).build());
 
 // Topic subscriptions (granular unsubscribe)
 ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
     .email("ada@acme.dev").topic(topicId, Subscription.OPT_OUT).build());
+
+// Segment membership
+ms.contacts().segments().add(contactIdOrEmail, segmentId);     // POST /contacts/{id}/segments/{segmentId}
+ms.contacts().segments().remove(contactIdOrEmail, segmentId);  // DELETE …
+
+// Bulk creation (MillionSend extension): up to 1000 per call
+CreateBatchContactsResponse res = ms.contacts().batch().create(items,
+    ConflictMode.UPSERT,                                        // ?on_conflict=error|skip|upsert
+    RequestOptions.builder().batchValidation(BatchValidation.PERMISSIVE).build());
+res.getData();     // [{ index, id, status: created|updated|skipped }]
+res.getCounts();   // created / updated / skipped / failed
+res.getErrors();   // permissive mode: rejected items
 ```
 
-Addressing a contact: pass a bare id string, or a `ContactAddress` by id or
-email (email wins when both are set).
+`Contact.getProperties()` returns `Map<String, ContactPropertyValue>` — each
+value carries its declared `type` (`string`/`number`) and the `value`.
+
+### Contact properties
+
+```java
+ms.contactProperties().create(CreateContactPropertyOptions.builder()
+    .key("plan").type("string").fallbackValue("free").build());
+ms.contactProperties().get(id);
+ms.contactProperties().list();
+ms.contactProperties().update(UpdateContactPropertyOptions.builder().id(id).fallbackValue(null).build()); // null clears
+ms.contactProperties().remove(id);
+```
 
 ### Topics
 
 ```java
 ms.topics().create(CreateTopicOptions.builder()
-    .name("Product updates").defaultSubscription(Subscription.OPT_IN).build());
+    .name("Product updates").defaultSubscription(Subscription.OPT_IN).visibility("public").build());
 ms.topics().get(id);
 ms.topics().list();     // bare { data } — topics are unpaginated
+ms.topics().update(id, UpdateTopicOptions.builder().name("Product news").build());
 ms.topics().remove(id);
 ```
 
@@ -139,10 +203,13 @@ ms.topics().remove(id);
 Id b = ms.broadcasts().create(CreateBroadcastOptions.builder()
     .from("Acme <news@acme.dev>").subject("Launch")
     .segmentId(segmentId)          // optional; also .topicId(...) — neither sends to all contacts
-    .html("<p>Hi {{{FIRST_NAME|there}}}</p>").build());
+    .previewText("It's here")
+    .html("<p>Hi {{{FIRST_NAME|there}}}</p>")
+    .send(true).scheduledAt("in 1 hour")   // send/schedule on create instead of saving a draft
+    .build());
 ms.broadcasts().list();
 ms.broadcasts().get(id);
-ms.broadcasts().update(id, UpdateBroadcastOptions.builder().subject("Launch 🚀").build()); // draft only
+ms.broadcasts().update(id, UpdateBroadcastOptions.builder().subject("Launch 🚀").topicId(null).build()); // draft only; topicId(null) clears
 ms.broadcasts().send(id, SendBroadcastOptions.builder().scheduledAt("2026-09-01T09:00:00Z").build());
 ms.broadcasts().send(id);      // send now
 ms.broadcasts().cancel(id);    // scheduled only
@@ -162,8 +229,76 @@ ms.segments().create(CreateSegmentOptions.builder()
     .build());
 ms.segments().get(id);   // includes a live contactCount
 ms.segments().list();
+ms.segments().contacts(id, ListOptions.builder().limit(100).build()); // matching contacts
 ms.segments().update(id, UpdateSegmentOptions.builder().name("Pro tier").build());
 ms.segments().remove(id);
+```
+
+### Suppressions
+
+```java
+ms.suppressions().add(AddSuppressionOptions.builder()
+    .email("bounced@example.com").origin(SuppressionOrigin.MANUAL).build());
+ms.suppressions().get(idOrEmail);
+ms.suppressions().list(ListSuppressionsOptions.builder().origin(SuppressionOrigin.BOUNCE).limit(50).build());
+ms.suppressions().remove(idOrEmail);
+ms.suppressions().batch().add(AddSuppressionsOptions.builder().emails(List.of(a, b)).build());   // up to 1000
+ms.suppressions().batch().remove(RemoveSuppressionsOptions.builder().emails(List.of(a)).build()); // or .ids(...)
+```
+
+### Domains
+
+```java
+Domain d = ms.domains().create(CreateDomainOptions.builder()
+    .name("acme.dev").region("us-east-1").customReturnPath("send")
+    .clickTracking(true).trackingSubdomain("links").build());
+d.getRecords();                 // DNS records to publish
+ms.domains().get(id);
+ms.domains().list();
+ms.domains().verify(id);        // re-check DNS
+ms.domains().update(UpdateDomainOptions.builder().id(id).openTracking(true).trackingSubdomain(null).build()); // null clears
+ms.domains().remove(id);
+```
+
+### Webhooks
+
+```java
+CreateWebhookResponse w = ms.webhooks().create(CreateWebhookOptions.builder()
+    .endpoint("https://acme.dev/hooks/millionsend")
+    .events(WebhookEvent.EMAIL_DELIVERED, WebhookEvent.EMAIL_BOUNCED)
+    .build());
+w.getSigningSecret();           // verify payload signatures with this
+ms.webhooks().get(id);          // also returns the signing secret
+ms.webhooks().list();
+ms.webhooks().update(id, UpdateWebhookOptions.builder().status("disabled").build());
+ms.webhooks().remove(id);
+```
+
+`deliverability.*` and `quota.*` events are MillionSend extensions.
+
+### API keys
+
+```java
+CreateApiKeyResponse k = ms.apiKeys().create(CreateApiKeyOptions.builder()
+    .name("ci").permission("sending_access").domainId(domainId).build());
+k.getToken();                   // shown only once
+ms.apiKeys().list();
+ms.apiKeys().remove(id);
+```
+
+### Templates
+
+Every identifier argument accepts the template id or its alias.
+
+```java
+ms.templates().create(CreateTemplateOptions.builder()
+    .name("Welcome").alias("welcome").subject("Hi {{{FIRST_NAME|there}}}").html("<p>…</p>").build());
+ms.templates().get("welcome");
+ms.templates().list();
+ms.templates().update("welcome", UpdateTemplateOptions.builder().html("<p>new</p>").subject(null).build()); // null clears
+ms.templates().publish(id);     // no-op kept for compatibility: every save is already live
+ms.templates().duplicate(id);
+ms.templates().remove(id);
 ```
 
 ### Deliverability (MillionSend extension)
@@ -180,6 +315,15 @@ report.getGuardrailStatus();  // "ok" | "warning" | "paused"
 Bands, check severities/statuses and the guardrail status are plain strings
 (the server may add values over time), and check ids are an open set.
 
+### Usage (MillionSend extension)
+
+```java
+UsageReport u = ms.usage().get();
+u.getPlan();                        // "free" | "pro" | "scale" | null when self-hosted
+u.getLimits().getEmailsPerDay();    // null when unlimited
+u.getToday().getEmailsSent();
+```
+
 ## Migrating from Resend
 
 ```diff
@@ -190,11 +334,15 @@ Bands, check severities/statuses and the guardrail status are plain strings
 ```
 
 Accessor and method names match (`resend.emails().send(...)` →
-`ms.emails().send(...)`). Notes:
+`ms.emails().send(...)`, `resend.suppressions().batch().add(...)` →
+`ms.suppressions().batch().add(...)`, and so on for `domains()`, `apiKeys()`,
+`webhooks()`, `templates()`, `contactProperties()`, `broadcasts()`, `topics()`).
+Notes:
 
-- **Domains and API keys** are managed in the MillionSend dashboard, not via the API, so there are no `.domains()`/`.apiKeys()` resources here.
-- **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
+- **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. The server keeps `/audiences/*` only as a compatibility shim; it is not part of this SDK. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
+- **Request options** use the same `RequestOptions` builder shape (`setIdempotencyKey`, `add(header, value)`), plus `batchValidation(...)`.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
+- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`.
 
 ## Build & test
 

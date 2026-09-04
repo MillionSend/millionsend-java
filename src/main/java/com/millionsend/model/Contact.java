@@ -15,7 +15,7 @@ public final class Contact {
   private String lastName;
   private String createdAt;
   private boolean unsubscribed;
-  private Map<String, String> properties;
+  private Map<String, ContactPropertyValue> properties;
 
   public String getObject() {
     return object;
@@ -45,7 +45,8 @@ public final class Contact {
     return unsubscribed;
   }
 
-  public Map<String, String> getProperties() {
+  /** Custom properties keyed by property key, each with its declared type and value. */
+  public Map<String, ContactPropertyValue> getProperties() {
     return properties;
   }
 }

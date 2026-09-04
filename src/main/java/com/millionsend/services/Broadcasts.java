@@ -46,10 +46,11 @@ public final class Broadcasts {
         new TypeReference<ListResponse<Broadcast>>() {});
   }
 
-  /** PATCH /broadcasts/{id} — draft only. */
+  /** PATCH /broadcasts/{id} — draft only. Only the fields set on {@code options} are sent. */
   public Id update(String id, UpdateBroadcastOptions options) throws MillionSendException {
     return http.request(
-        "PATCH", "/broadcasts/" + enc(id), options, null, null, new TypeReference<Id>() {});
+        "PATCH", "/broadcasts/" + enc(id), options.getChanges(), null, null,
+        new TypeReference<Id>() {});
   }
 
   /** DELETE /broadcasts/{id} — draft only. */

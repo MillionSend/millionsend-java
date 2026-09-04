@@ -5,11 +5,10 @@ import java.util.Map;
 
 /**
  * Options for {@code contacts().update(...)}. Addressed by id or email. Only
- * the fields you set are sent; passing
- * {@code null} to {@link Builder#firstName}/{@link Builder#lastName}/
- * {@link Builder#properties} clears that field, while leaving it unset leaves
- * it unchanged. That present-vs-null distinction is why the changed fields are
- * accumulated in a map rather than a plain bean.
+ * the fields you set are sent; passing {@code null} to
+ * {@link Builder#firstName}/{@link Builder#lastName} clears that field, while
+ * leaving it unset leaves it unchanged. That present-vs-null distinction is why
+ * the changed fields are accumulated in a map rather than a plain bean.
  */
 public final class UpdateContactOptions {
 
@@ -66,7 +65,7 @@ public final class UpdateContactOptions {
       return this;
     }
 
-    /** {@code null} clears all custom properties. */
+    /** Merged into the existing properties; a {@code null} value removes that key. */
     public Builder properties(Map<String, Object> properties) {
       o.changes.put("properties", properties);
       return this;

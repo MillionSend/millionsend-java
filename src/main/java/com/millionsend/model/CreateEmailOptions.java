@@ -3,12 +3,15 @@ package com.millionsend.model;
 import com.fasterxml.jackson.annotation.JsonInclude;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * Options for {@code emails().send(...)}. camelCase fields map to the snake_case
  * wire ({@code replyTo} → {@code reply_to}, {@code scheduledAt} → {@code scheduled_at});
- * unset fields are omitted.
+ * unset fields are omitted. Every field set here reaches the wire — including
+ * {@code template}, which the server does not support yet and answers with 422.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class CreateEmailOptions {
@@ -23,6 +26,10 @@ public final class CreateEmailOptions {
   private List<String> replyTo;
   private String scheduledAt;
   private List<Tag> tags;
+  private String topicId;
+  private List<Attachment> attachments;
+  private Map<String, String> headers;
+  private Object template;
 
   private CreateEmailOptions() {}
 
@@ -108,6 +115,48 @@ public final class CreateEmailOptions {
         o.tags = new ArrayList<>();
       }
       o.tags.add(tag);
+      return this;
+    }
+
+    /** Only contacts subscribed to this topic receive the email (MillionSend extension). */
+    public Builder topicId(String topicId) {
+      o.topicId = topicId;
+      return this;
+    }
+
+    public Builder attachments(List<Attachment> attachments) {
+      o.attachments = attachments;
+      return this;
+    }
+
+    public Builder attachment(Attachment attachment) {
+      if (o.attachments == null) {
+        o.attachments = new ArrayList<>();
+      }
+      o.attachments.add(attachment);
+      return this;
+    }
+
+    /** Custom message headers, sent verbatim (keys are not case-converted). */
+    public Builder headers(Map<String, String> headers) {
+      o.headers = headers;
+      return this;
+    }
+
+    public Builder header(String name, String value) {
+      if (o.headers == null) {
+        o.headers = new LinkedHashMap<>();
+      }
+      o.headers.put(name, value);
+      return this;
+    }
+
+    /**
+     * Resend's {@code template} object ({@code { id, variables }}), forwarded as-is.
+     * Not supported by the server yet: any value is a 422. Send {@code html}/{@code text}.
+     */
+    public Builder template(Object template) {
+      o.template = template;
       return this;
     }
 

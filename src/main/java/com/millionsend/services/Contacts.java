@@ -5,34 +5,55 @@ import static com.millionsend.core.HttpClient.enc;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.millionsend.MillionSendException;
 import com.millionsend.core.HttpClient;
+import com.millionsend.core.RequestOptions;
+import com.millionsend.model.ConflictMode;
 import com.millionsend.model.Contact;
 import com.millionsend.model.ContactAddress;
+import com.millionsend.model.CreateBatchContactsResponse;
 import com.millionsend.model.CreateContactOptions;
+import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Id;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.RemoveContactResponse;
 import com.millionsend.model.UpdateContactOptions;
 import com.millionsend.model.UpdateContactTopicsOptions;
+import java.util.Collections;
+import java.util.List;
 
 /**
  * The {@code contacts} resource. Contacts are team-global and addressable by id
  * or email (email wins when both are set). Per-contact topic subscriptions live
- * under {@link #topics()}.
+ * under {@link #topics()}, segment membership under {@link #segments()}, and
+ * bulk creation under {@link #batch()}.
  */
 public final class Contacts {
 
   private final HttpClient http;
   private final ContactTopics topics;
+  private final ContactSegments segments;
+  private final ContactsBatch batch;
 
   public Contacts(HttpClient http) {
     this.http = http;
     this.topics = new ContactTopics(http);
+    this.segments = new ContactSegments(http);
+    this.batch = new ContactsBatch(http);
   }
 
   /** Per-contact topic subscriptions ({@code contacts().topics().update(...)}). */
   public ContactTopics topics() {
     return topics;
+  }
+
+  /** Segment membership ({@code contacts().segments().add(...)}). */
+  public ContactSegments segments() {
+    return segments;
+  }
+
+  /** Bulk creation ({@code contacts().batch().create(...)}), a MillionSend extension. */
+  public ContactsBatch batch() {
+    return batch;
   }
 
   /** POST /contacts — 409 {@code validation_error} when the email already exists on the team. */
@@ -104,6 +125,67 @@ public final class Contacts {
       return http.request(
           "PATCH", "/contacts/" + key + "/topics", options.getTopics(), null, null,
           new TypeReference<Id>() {});
+    }
+  }
+
+  /** Segment membership of a contact. */
+  public static final class ContactSegments {
+
+    private final HttpClient http;
+
+    ContactSegments(HttpClient http) {
+      this.http = http;
+    }
+
+    /** POST /contacts/{idOrEmail}/segments/{segmentId} — idempotent. */
+    public Id add(String contactIdOrEmail, String segmentId) throws MillionSendException {
+      return http.request(
+          "POST", "/contacts/" + enc(contactIdOrEmail) + "/segments/" + enc(segmentId), null, null,
+          null, new TypeReference<Id>() {});
+    }
+
+    /** DELETE /contacts/{idOrEmail}/segments/{segmentId} — 404 when not a member. */
+    public DeletedResponse remove(String contactIdOrEmail, String segmentId)
+        throws MillionSendException {
+      return http.request(
+          "DELETE", "/contacts/" + enc(contactIdOrEmail) + "/segments/" + enc(segmentId), null,
+          null, null, new TypeReference<DeletedResponse>() {});
+    }
+  }
+
+  /** Bulk contact creation: POST /contacts/batch, up to 1000 items. */
+  public static final class ContactsBatch {
+
+    private final HttpClient http;
+
+    ContactsBatch(HttpClient http) {
+      this.http = http;
+    }
+
+    /** POST /contacts/batch with the server defaults ({@code on_conflict=error}, strict validation). */
+    public CreateBatchContactsResponse create(List<CreateContactOptions> contacts)
+        throws MillionSendException {
+      return create(contacts, null, null);
+    }
+
+    /** POST /contacts/batch?on_conflict={mode} */
+    public CreateBatchContactsResponse create(
+        List<CreateContactOptions> contacts, ConflictMode onConflict) throws MillionSendException {
+      return create(contacts, onConflict, null);
+    }
+
+    /**
+     * POST /contacts/batch?on_conflict={mode} with per-request options — set
+     * {@code batchValidation(PERMISSIVE)} to write the valid items and get the
+     * rest back in {@code errors}.
+     */
+    public CreateBatchContactsResponse create(
+        List<CreateContactOptions> contacts, ConflictMode onConflict, RequestOptions requestOptions)
+        throws MillionSendException {
+      return http.request(
+          "POST", "/contacts/batch", contacts,
+          onConflict == null ? null : Collections.singletonMap("on_conflict", onConflict.getValue()),
+          requestOptions, new TypeReference<CreateBatchContactsResponse>() {});
     }
   }
 }

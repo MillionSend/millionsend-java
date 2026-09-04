@@ -1,22 +1,18 @@
 package com.millionsend.model;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
-import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-/** Options for {@code broadcasts().update(...)} — draft broadcasts only. All fields optional. */
-@JsonInclude(JsonInclude.Include.NON_NULL)
+/**
+ * Options for {@code broadcasts().update(...)} — draft broadcasts only. Only the
+ * fields you set are sent; {@code topicId(null)} clears the topic (an explicit
+ * JSON null), while not calling it leaves it unchanged.
+ */
 public final class UpdateBroadcastOptions {
 
-  private String name;
-  private String segmentId;
-  private String from;
-  private String subject;
-  private String html;
-  private String text;
-  private List<String> replyTo;
-  private String topicId;
+  private final Map<String, Object> changes = new LinkedHashMap<>();
 
   private UpdateBroadcastOptions() {}
 
@@ -24,51 +20,62 @@ public final class UpdateBroadcastOptions {
     return new Builder();
   }
 
+  /** The snake_case body to PATCH — only the fields the caller set. */
+  public Map<String, Object> getChanges() {
+    return changes;
+  }
+
   public static final class Builder {
     private final UpdateBroadcastOptions o = new UpdateBroadcastOptions();
 
     public Builder name(String name) {
-      o.name = name;
+      o.changes.put("name", name);
       return this;
     }
 
     public Builder segmentId(String segmentId) {
-      o.segmentId = segmentId;
+      o.changes.put("segment_id", segmentId);
       return this;
     }
 
     public Builder from(String from) {
-      o.from = from;
+      o.changes.put("from", from);
       return this;
     }
 
     public Builder subject(String subject) {
-      o.subject = subject;
+      o.changes.put("subject", subject);
       return this;
     }
 
     public Builder html(String html) {
-      o.html = html;
+      o.changes.put("html", html);
       return this;
     }
 
     public Builder text(String text) {
-      o.text = text;
+      o.changes.put("text", text);
       return this;
     }
 
     public Builder replyTo(String... replyTo) {
-      o.replyTo = new ArrayList<>(Arrays.asList(replyTo));
-      return this;
+      return replyTo(Arrays.asList(replyTo));
     }
 
     public Builder replyTo(List<String> replyTo) {
-      o.replyTo = replyTo;
+      o.changes.put("reply_to", replyTo);
       return this;
     }
 
+    /** Inbox preview (preheader) text. */
+    public Builder previewText(String previewText) {
+      o.changes.put("preview_text", previewText);
+      return this;
+    }
+
+    /** {@code null} clears the topic. */
     public Builder topicId(String topicId) {
-      o.topicId = topicId;
+      o.changes.put("topic_id", topicId);
       return this;
     }
 

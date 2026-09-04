@@ -10,8 +10,9 @@ import com.millionsend.model.DataResponse;
 import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Id;
 import com.millionsend.model.Topic;
+import com.millionsend.model.UpdateTopicOptions;
 
-/** The {@code topics} resource: create, get, list, remove. */
+/** The {@code topics} resource: create, get, list, update, remove. */
 public final class Topics {
 
   private final HttpClient http;
@@ -33,6 +34,12 @@ public final class Topics {
   /** GET /topics — a bare {@code { data }} list (topics are unpaginated). */
   public DataResponse<Topic> list() throws MillionSendException {
     return http.request("GET", "/topics", null, null, null, new TypeReference<DataResponse<Topic>>() {});
+  }
+
+  /** PATCH /topics/{id} — name, description, visibility. */
+  public Id update(String id, UpdateTopicOptions options) throws MillionSendException {
+    return http.request(
+        "PATCH", "/topics/" + enc(id), options, null, null, new TypeReference<Id>() {});
   }
 
   /** DELETE /topics/{id} */

@@ -16,7 +16,10 @@ public final class CreateBroadcastOptions {
   private String html;
   private String text;
   private List<String> replyTo;
+  private String previewText;
   private String topicId;
+  private Boolean send;
+  private String scheduledAt;
 
   private CreateBroadcastOptions() {}
 
@@ -67,8 +70,26 @@ public final class CreateBroadcastOptions {
       return this;
     }
 
+    /** Inbox preview (preheader) text. */
+    public Builder previewText(String previewText) {
+      o.previewText = previewText;
+      return this;
+    }
+
     public Builder topicId(String topicId) {
       o.topicId = topicId;
+      return this;
+    }
+
+    /** {@code true} sends (or, with {@code scheduledAt}, schedules) immediately instead of saving a draft. */
+    public Builder send(boolean send) {
+      o.send = send;
+      return this;
+    }
+
+    /** Deliver later; requires {@code send(true)}. */
+    public Builder scheduledAt(String scheduledAt) {
+      o.scheduledAt = scheduledAt;
       return this;
     }
 
