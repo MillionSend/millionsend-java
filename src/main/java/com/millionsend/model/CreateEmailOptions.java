@@ -118,6 +118,11 @@ public final class CreateEmailOptions {
       return this;
     }
 
+    /** Alias of {@link #tag(Tag)}, mirroring Resend. */
+    public Builder addTag(Tag tag) {
+      return tag(tag);
+    }
+
     /** Only contacts subscribed to this topic receive the email (MillionSend extension). */
     public Builder topicId(String topicId) {
       o.topicId = topicId;
@@ -137,6 +142,11 @@ public final class CreateEmailOptions {
       return this;
     }
 
+    /** Alias of {@link #attachment(Attachment)}, mirroring Resend. */
+    public Builder addAttachment(Attachment attachment) {
+      return attachment(attachment);
+    }
+
     /** Custom message headers, sent verbatim (keys are not case-converted). */
     public Builder headers(Map<String, String> headers) {
       o.headers = headers;
@@ -149,6 +159,11 @@ public final class CreateEmailOptions {
       }
       o.headers.put(name, value);
       return this;
+    }
+
+    /** Alias of {@link #header(String, String)}, mirroring Resend. */
+    public Builder addHeader(String name, String value) {
+      return header(name, value);
     }
 
     /**

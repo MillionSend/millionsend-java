@@ -6,8 +6,9 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Options for {@code templates().create(...)}. {@code from} and {@code replyTo}
- * are forwarded as-is; the server does not support them yet and answers 422.
+ * Options for {@code templates().create(...)}. {@code from}, {@code replyTo} and
+ * {@code variables} are forwarded as-is; the server does not support them yet and
+ * answers 422 when they are set.
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class CreateTemplateOptions {
@@ -19,6 +20,7 @@ public final class CreateTemplateOptions {
   private String alias;
   private String from;
   private List<String> replyTo;
+  private List<Object> variables;
 
   private CreateTemplateOptions() {}
 
@@ -67,6 +69,12 @@ public final class CreateTemplateOptions {
 
     public Builder replyTo(List<String> replyTo) {
       o.replyTo = replyTo;
+      return this;
+    }
+
+    /** Resend's template variable declarations ({@code [{ key, type, fallback_value }]}), forwarded as-is. */
+    public Builder variables(List<Object> variables) {
+      o.variables = variables;
       return this;
     }
 

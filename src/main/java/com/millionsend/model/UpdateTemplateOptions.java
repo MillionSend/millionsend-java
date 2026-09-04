@@ -71,6 +71,12 @@ public final class UpdateTemplateOptions {
       return this;
     }
 
+    /** Resend's template variable declarations, forwarded as-is. */
+    public Builder variables(List<Object> variables) {
+      o.changes.put("variables", variables);
+      return this;
+    }
+
     public UpdateTemplateOptions build() {
       return o;
     }

@@ -86,12 +86,13 @@ try {
 ## Resources
 
 Every request field you set reaches the wire — nothing is dropped client-side.
-Fields the server does not support yet (`template` on send, `from`/`replyTo` on
-templates) are forwarded as-is and answered with a 422.
+Fields the server does not support yet (`template` on send, `from`/`replyTo`/`variables`
+on templates) are forwarded as-is and answered with a 422.
 
 ### Request options
 
-Any `send`/`create` accepts a `RequestOptions` (mirroring `resend-java`):
+`emails().send`, `batch().send` and `contacts().batch().create` accept a
+`RequestOptions` (the same builder shape as `resend-java`):
 
 ```java
 import com.millionsend.core.RequestOptions;
@@ -125,6 +126,7 @@ accept one or more addresses. Also available: `.tag(new Tag(name, value))`,
 `.attachment(Attachment.builder().fileName("a.pdf").content(base64).build())`
 (or `.path(url)`, plus `contentType`/`contentId`), `.header(name, value)` and
 `.template(...)` (forwarded; the server answers 422 — send `html`/`text`).
+`resend-java`'s `addTag`/`addAttachment`/`addHeader` spellings work too.
 
 ### Batch
 
@@ -295,7 +297,7 @@ ms.templates().create(CreateTemplateOptions.builder()
     .name("Welcome").alias("welcome").subject("Hi {{{FIRST_NAME|there}}}").html("<p>…</p>").build());
 ms.templates().get("welcome");
 ms.templates().list();
-ms.templates().update("welcome", UpdateTemplateOptions.builder().html("<p>new</p>").subject(null).build()); // null clears
+ms.templates().update("welcome", UpdateTemplateOptions.builder().html("<p>new</p>").subject(null).build()); // null clears subject/text/alias
 ms.templates().publish(id);     // no-op kept for compatibility: every save is already live
 ms.templates().duplicate(id);
 ms.templates().remove(id);

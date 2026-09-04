@@ -104,6 +104,7 @@ class ParityTest {
                 .replyTo("r@x.dev")
                 .scheduledAt("2999-01-01T00:00:00Z")
                 .tag(new Tag("k", "v"))
+                .addTag(new Tag("k2", "v2"))
                 .topicId("11111111-1111-1111-1111-111111111111")
                 .attachment(
                     Attachment.builder()
@@ -112,9 +113,10 @@ class ParityTest {
                         .contentType("text/plain")
                         .contentId("cid1")
                         .build())
-                .attachment(Attachment.builder().fileName("b.pdf").path("https://x.dev/b.pdf").build())
+                .addAttachment(Attachment.builder().fileName("b.pdf").path("https://x.dev/b.pdf").build())
                 .headers(headers)
                 .header("X-Other", "2")
+                .addHeader("X-Third", "3")
                 .template(Collections.singletonMap("id", "tpl_1"))
                 .build());
     assertEquals("POST", server.method);
@@ -124,12 +126,12 @@ class ParityTest {
             "{\"from\":\"Acme <a@x.dev>\",\"to\":[\"b@x.dev\",\"c@x.dev\"],\"subject\":\"s\","
                 + "\"html\":\"<p>h</p>\",\"text\":\"t\",\"cc\":[\"cc@x.dev\"],\"bcc\":[\"bcc@x.dev\"],"
                 + "\"reply_to\":[\"r@x.dev\"],\"scheduled_at\":\"2999-01-01T00:00:00Z\","
-                + "\"tags\":[{\"name\":\"k\",\"value\":\"v\"}],"
+                + "\"tags\":[{\"name\":\"k\",\"value\":\"v\"},{\"name\":\"k2\",\"value\":\"v2\"}],"
                 + "\"topic_id\":\"11111111-1111-1111-1111-111111111111\","
                 + "\"attachments\":[{\"filename\":\"a.txt\",\"content\":\"aGk=\","
                 + "\"content_type\":\"text/plain\",\"content_id\":\"cid1\"},"
                 + "{\"filename\":\"b.pdf\",\"path\":\"https://x.dev/b.pdf\"}],"
-                + "\"headers\":{\"X-Entity-Ref-ID\":\"ref-1\",\"X-Other\":\"2\"},"
+                + "\"headers\":{\"X-Entity-Ref-ID\":\"ref-1\",\"X-Other\":\"2\",\"X-Third\":\"3\"},"
                 + "\"template\":{\"id\":\"tpl_1\"}}"),
         body());
   }
@@ -536,13 +538,17 @@ class ParityTest {
                 .subject("Hi")
                 .text("hi")
                 .alias("welcome")
+                .from("Acme <a@x.dev>")
+                .replyTo("r@x.dev")
+                .variables(Collections.singletonList(Collections.singletonMap("key", "name")))
                 .build());
     assertEquals("POST", server.method);
     assertEquals("/templates", server.path);
     assertEquals(
         json(
             "{\"name\":\"Welcome\",\"html\":\"<p>hi</p>\",\"subject\":\"Hi\",\"text\":\"hi\","
-                + "\"alias\":\"welcome\"}"),
+                + "\"alias\":\"welcome\",\"from\":\"Acme <a@x.dev>\",\"reply_to\":[\"r@x.dev\"],"
+                + "\"variables\":[{\"key\":\"name\"}]}"),
         body());
 
     server.responseBody =
@@ -565,10 +571,18 @@ class ParityTest {
 
     server.responseBody = "{\"object\":\"template\",\"id\":\"t1\"}";
     ms.templates()
-        .update("t1", UpdateTemplateOptions.builder().html("<p>new</p>").subject(null).alias(null).build());
+        .update(
+            "t1",
+            UpdateTemplateOptions.builder()
+                .html("<p>new</p>")
+                .subject(null)
+                .alias(null)
+                .variables(Collections.emptyList())
+                .build());
     assertEquals("PATCH", server.method);
     assertEquals("/templates/t1", server.path);
-    assertEquals(json("{\"html\":\"<p>new</p>\",\"subject\":null,\"alias\":null}"), body());
+    assertEquals(
+        json("{\"html\":\"<p>new</p>\",\"subject\":null,\"alias\":null,\"variables\":[]}"), body());
 
     ms.templates().publish("t1");
     assertEquals("POST", server.method);
