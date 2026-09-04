@@ -2,17 +2,20 @@ package com.millionsend;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.millionsend.model.ContactAddress;
+import com.millionsend.model.ContactTopic;
 import com.millionsend.model.CreateBroadcastOptions;
 import com.millionsend.model.CreateContactOptions;
 import com.millionsend.model.CreateEmailOptions;
 import com.millionsend.model.CreateSegmentOptions;
 import com.millionsend.model.CreateTopicOptions;
 import com.millionsend.model.ListOptions;
+import com.millionsend.model.ListResponse;
 import com.millionsend.model.SegmentCondition;
 import com.millionsend.model.SegmentFilter;
 import com.millionsend.model.SendBroadcastOptions;
@@ -146,6 +149,25 @@ class ResourcesTest {
     assertTrue(body().isArray());
     assertEquals("t1", body().get(0).get("id").asText());
     assertEquals("opt_out", body().get(0).get("subscription").asText());
+  }
+
+  @Test
+  void contactTopicsList() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"t1\",\"name\":\"Insights\","
+            + "\"description\":null,\"subscription\":\"opt_in\",\"explicit\":false}]}";
+    ListResponse<ContactTopic> res = ms.contacts().topics().list("ada+1@x.dev");
+    assertEquals("GET", server.method);
+    assertEquals("/contacts/ada%2B1%40x.dev/topics", server.rawPath);
+    assertEquals("", server.body);
+    assertEquals("list", res.getObject());
+    assertFalse(res.isHasMore());
+    ContactTopic t = res.getData().get(0);
+    assertEquals("t1", t.getId());
+    assertEquals("Insights", t.getName());
+    assertNull(t.getDescription());
+    assertEquals(Subscription.OPT_IN, t.getSubscription());
+    assertFalse(t.isExplicit());
   }
 
   @Test

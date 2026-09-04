@@ -4,8 +4,8 @@ Official Java SDK for [MillionSend](https://github.com/MillionSend/millionsend) 
 
 The API is wire-compatible with Resend, and this SDK deliberately mirrors the
 shape of [`resend-java`](https://github.com/resend/resend-java), so migrating is
-mostly a find-and-replace: swap the dependency, the class name, and point the
-base URL at your instance.
+mostly a find-and-replace: swap the dependency and the class name. MillionSend
+Cloud works with just the key; a self-hosted instance also sets its origin.
 
 ## Install
 
@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.4.0</version>
+  <version>0.5.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.4.0'
+implementation 'com.millionsend:millionsend-java:0.5.0'
 ```
 
 Requires Java 11+.
@@ -35,7 +35,8 @@ import com.millionsend.MillionSendException;
 import com.millionsend.model.CreateEmailOptions;
 import com.millionsend.model.CreateEmailResponse;
 
-MillionSend ms = new MillionSend("ms_123", "https://mail.acme.dev");
+MillionSend ms = new MillionSend("ms_123");                          // MillionSend Cloud
+// MillionSend ms = new MillionSend("ms_123", "https://mail.acme.dev"); // self-hosted
 
 try {
   CreateEmailResponse sent = ms.emails().send(
@@ -55,13 +56,13 @@ try {
 
 ```java
 new MillionSend();                       // apiKey + baseUrl from the environment
-new MillionSend(apiKey);                 // baseUrl from MILLIONSEND_BASE_URL or the default
-new MillionSend(apiKey, baseUrl);        // explicit base URL
+new MillionSend(apiKey);                 // baseUrl from MILLIONSEND_BASE_URL or MillionSend Cloud
+new MillionSend(apiKey, baseUrl);        // explicit base URL (self-hosted)
 new MillionSend(apiKey, baseUrl, true);  // also accept a non-loopback http:// base URL
 ```
 
 - `apiKey` falls back to `MILLIONSEND_API_KEY`. A missing key throws `IllegalArgumentException` at construction.
-- `baseUrl` falls back to `MILLIONSEND_BASE_URL`, then `http://localhost:3001`. MillionSend is self-hosted, so **set this to your deployment in production.**
+- `baseUrl` falls back to `MILLIONSEND_BASE_URL`, then MillionSend Cloud (`https://api.millionsend.com`). Self-hosting? Set it to your instance's origin.
 - Plain `http://` is only accepted for loopback hosts (`localhost`, `127.0.0.1`, `::1`); any other `http://` URL throws `IllegalArgumentException` at construction, since the API key is sent as a bearer header. Pass `allowInsecureHttp = true` (third constructor argument) to talk to a non-TLS instance elsewhere (e.g. inside a private network).
 
 ## Error handling
@@ -69,7 +70,7 @@ new MillionSend(apiKey, baseUrl, true);  // also accept a non-loopback http:// b
 Every call throws a single checked `MillionSendException` on a non-2xx response.
 It carries the API's error shape:
 
-- `getName()` — a stable snake_case code you can switch on (`validation_error`, `not_found`, `restricted_api_key`, `sending_paused`, …)
+- `getName()` — a stable snake_case code you can switch on (`validation_error`, `not_found`, `restricted_api_key`, `sending_paused`, `all_recipients_suppressed`, …)
 - `getMessage()` — a human-readable description
 - `getStatusCode()` — the HTTP status, or `null` when the request never reached the API (a client-side or transport failure)
 
@@ -82,6 +83,10 @@ try {
   }
 }
 ```
+
+`POST /emails` and `POST /emails/batch` answer `422 all_recipients_suppressed`
+("All recipients are suppressed") when every `to` recipient is on the
+suppression list or opted out of the send's `topicId`.
 
 ## Resources
 
@@ -160,6 +165,9 @@ ms.contacts().list(ListOptions.builder().limit(50).build());
 // Topic subscriptions (granular unsubscribe)
 ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
     .email("ada@acme.dev").topic(topicId, Subscription.OPT_OUT).build());
+ListResponse<ContactTopic> topics = ms.contacts().topics().list("ada@acme.dev"); // GET /contacts/{idOrEmail}/topics
+topics.getData().get(0).getSubscription(); // effective choice: the contact's own, else the topic default
+topics.getData().get(0).isExplicit();      // false when it is the topic default
 
 // Segment membership
 ms.contacts().segments().add(contactIdOrEmail, segmentId);     // POST /contacts/{id}/segments/{segmentId}
@@ -332,8 +340,11 @@ u.getToday().getEmailsSent();
 - import com.resend.Resend;
 - Resend resend = new Resend("re_123");
 + import com.millionsend.MillionSend;
-+ MillionSend ms = new MillionSend("ms_123", "https://mail.acme.dev");
++ MillionSend ms = new MillionSend("ms_123");
 ```
+
+Self-hosting? Pass your instance's origin as the second argument (or set
+`MILLIONSEND_BASE_URL`).
 
 Accessor and method names match (`resend.emails().send(...)` →
 `ms.emails().send(...)`, `resend.suppressions().batch().add(...)` →
@@ -354,7 +365,7 @@ mvn verify        # + build the jar
 ```
 
 The integration test in `E2ETest` runs only when `MILLIONSEND_API_KEY` is set
-(and `MILLIONSEND_BASE_URL` if not localhost); it is skipped otherwise.
+(and `MILLIONSEND_BASE_URL` for a self-hosted instance); it is skipped otherwise.
 
 ## Releasing
 

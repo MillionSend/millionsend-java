@@ -16,8 +16,8 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 /**
  * End-to-end smoke test against a real MillionSend instance. Opt-in: runs only
- * when {@code MILLIONSEND_API_KEY} is set (and {@code MILLIONSEND_BASE_URL} if
- * not localhost:3001). Exercises the contact lifecycle, which needs no verified
+ * when {@code MILLIONSEND_API_KEY} is set (and {@code MILLIONSEND_BASE_URL} for
+ * a self-hosted instance). Exercises the contact lifecycle, which needs no verified
  * domain. Sending is not asserted here — it requires a verified sender domain.
  */
 @EnabledIfEnvironmentVariable(named = "MILLIONSEND_API_KEY", matches = ".+")

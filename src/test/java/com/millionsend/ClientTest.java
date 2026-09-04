@@ -32,6 +32,15 @@ class ClientTest {
   }
 
   @Test
+  void baseUrlDefaultsToCloudUnlessEnvOrOptionWins() {
+    assertEquals("https://api.millionsend.com", MillionSend.resolveBaseUrl(null, null));
+    assertEquals("https://api.millionsend.com", MillionSend.resolveBaseUrl(null, ""));
+    assertEquals("https://mail.acme.dev", MillionSend.resolveBaseUrl(null, "https://mail.acme.dev"));
+    assertEquals(
+        "https://self.acme.dev", MillionSend.resolveBaseUrl("https://self.acme.dev", "https://mail.acme.dev"));
+  }
+
+  @Test
   void refusesNonLoopbackHttpUnlessAllowed() {
     IllegalArgumentException e =
         assertThrows(
@@ -114,6 +123,21 @@ class ClientTest {
       assertEquals(422, e.getStatusCode());
       assertEquals("validation_error", e.getName());
       assertEquals("bad", e.getMessage());
+    }
+  }
+
+  @Test
+  void surfacesAllRecipientsSuppressedOn422() throws Exception {
+    try (MockServer server = new MockServer()) {
+      server.status = 422;
+      server.responseBody =
+          "{\"statusCode\":422,\"name\":\"all_recipients_suppressed\","
+              + "\"message\":\"All recipients are suppressed\"}";
+      MillionSendException e =
+          assertThrows(MillionSendException.class, () -> server.client().emails().send(email()));
+      assertEquals(422, e.getStatusCode());
+      assertEquals("all_recipients_suppressed", e.getName());
+      assertEquals("All recipients are suppressed", e.getMessage());
     }
   }
 

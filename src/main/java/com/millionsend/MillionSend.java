@@ -20,7 +20,8 @@ import com.millionsend.services.Webhooks;
  * The MillionSend client. Construct once and reuse.
  *
  * <pre>{@code
- * MillionSend ms = new MillionSend("ms_123", "https://mail.acme.dev");
+ * MillionSend ms = new MillionSend("ms_123");                         // MillionSend Cloud
+ * MillionSend self = new MillionSend("ms_123", "https://mail.acme.dev"); // self-hosted
  * CreateEmailResponse sent = ms.emails().send(
  *     CreateEmailOptions.builder()
  *         .from("Acme <onboarding@acme.dev>")
@@ -32,13 +33,13 @@ import com.millionsend.services.Webhooks;
  *
  * <p>Every call throws a {@link MillionSendException} on a non-2xx response (or
  * a transport failure). The API key falls back to {@code MILLIONSEND_API_KEY}
- * and the base URL to {@code MILLIONSEND_BASE_URL} (then {@code
- * http://localhost:3001}, since MillionSend is self-hosted). A missing API key
- * throws {@link IllegalArgumentException} at construction.
+ * and the base URL to {@code MILLIONSEND_BASE_URL}, then MillionSend Cloud
+ * ({@code https://api.millionsend.com}). A missing API key throws
+ * {@link IllegalArgumentException} at construction.
  */
 public final class MillionSend {
 
-  private static final String DEFAULT_BASE_URL = "http://localhost:3001";
+  private static final String DEFAULT_BASE_URL = "https://api.millionsend.com";
 
   private final Emails emails;
   private final Batch batch;
@@ -60,15 +61,15 @@ public final class MillionSend {
     this(null, null);
   }
 
-  /** Uses the given API key; base URL from {@code MILLIONSEND_BASE_URL} or the default. */
+  /** Uses the given API key; base URL from {@code MILLIONSEND_BASE_URL} or MillionSend Cloud. */
   public MillionSend(String apiKey) {
     this(apiKey, null);
   }
 
   /**
    * @param apiKey the API key, or {@code null} to read {@code MILLIONSEND_API_KEY}
-   * @param baseUrl your instance URL, or {@code null} to read {@code MILLIONSEND_BASE_URL}
-   *     then fall back to {@code http://localhost:3001}
+   * @param baseUrl your self-hosted instance URL, or {@code null} to read
+   *     {@code MILLIONSEND_BASE_URL} then fall back to MillionSend Cloud
    */
   public MillionSend(String apiKey, String baseUrl) {
     this(apiKey, baseUrl, false);
@@ -84,10 +85,7 @@ public final class MillionSend {
       throw new IllegalArgumentException(
           "Missing API key. Pass it to new MillionSend(apiKey) or set MILLIONSEND_API_KEY.");
     }
-    String url = baseUrl != null ? baseUrl : System.getenv("MILLIONSEND_BASE_URL");
-    if (url == null || url.isEmpty()) {
-      url = DEFAULT_BASE_URL;
-    }
+    String url = resolveBaseUrl(baseUrl, System.getenv("MILLIONSEND_BASE_URL"));
     HttpClient http = new HttpClient(key, url, allowInsecureHttp);
     this.emails = new Emails(http);
     this.batch = new Batch(http);
@@ -103,6 +101,17 @@ public final class MillionSend {
     this.templates = new Templates(http);
     this.contactProperties = new ContactProperties(http);
     this.usage = new Usage(http);
+  }
+
+  /** Explicit option, then the environment, then MillionSend Cloud. */
+  static String resolveBaseUrl(String explicit, String fromEnv) {
+    if (explicit != null && !explicit.isEmpty()) {
+      return explicit;
+    }
+    if (fromEnv != null && !fromEnv.isEmpty()) {
+      return fromEnv;
+    }
+    return DEFAULT_BASE_URL;
   }
 
   public Emails emails() {

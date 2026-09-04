@@ -9,6 +9,7 @@ import com.millionsend.core.RequestOptions;
 import com.millionsend.model.ConflictMode;
 import com.millionsend.model.Contact;
 import com.millionsend.model.ContactAddress;
+import com.millionsend.model.ContactTopic;
 import com.millionsend.model.CreateBatchContactsResponse;
 import com.millionsend.model.CreateContactOptions;
 import com.millionsend.model.DeletedResponse;
@@ -41,7 +42,7 @@ public final class Contacts {
     this.batch = new ContactsBatch(http);
   }
 
-  /** Per-contact topic subscriptions ({@code contacts().topics().update(...)}). */
+  /** Per-contact topic subscriptions ({@code contacts().topics().list(...)} / {@code update(...)}). */
   public ContactTopics topics() {
     return topics;
   }
@@ -117,6 +118,16 @@ public final class Contacts {
 
     ContactTopics(HttpClient http) {
       this.http = http;
+    }
+
+    /**
+     * GET /contacts/{idOrEmail}/topics — every topic with the contact's effective
+     * subscription; {@code explicit} is false where that is the topic default.
+     */
+    public ListResponse<ContactTopic> list(String contactIdOrEmail) throws MillionSendException {
+      return http.request(
+          "GET", "/contacts/" + enc(contactIdOrEmail) + "/topics", null, null, null,
+          new TypeReference<ListResponse<ContactTopic>>() {});
     }
 
     /** PATCH /contacts/{idOrEmail}/topics with the bare array of topic updates. */
