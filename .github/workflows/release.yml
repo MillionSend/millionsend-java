@@ -6,6 +6,8 @@ name: Release
 #   MAVEN_GPG_PRIVATE_KEY / MAVEN_GPG_PASSPHRASE — ASCII-armored signing key
 on:
   workflow_dispatch:
+  push:
+    tags: ["v*"]
 
 permissions:
   contents: read
@@ -15,6 +17,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      # A tag publishes exactly the version the manifest declares; a tag that
+      # disagrees with it is refused instead of shipping the wrong number.
+      - name: Tag must match the manifest version
+        if: github.ref_type == 'tag'
+        run: test "v$(sed -n 's/.*<version>\(.*\)<\/version>/\1/p' pom.xml | head -1)" = "$GITHUB_REF_NAME"
       - uses: actions/setup-java@cf277c60eb25467037889841efdb72551f06f6c3 # v4
         with:
           distribution: temurin
