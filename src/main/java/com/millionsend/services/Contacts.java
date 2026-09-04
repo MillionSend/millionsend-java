@@ -12,11 +12,14 @@ import com.millionsend.model.ContactAddress;
 import com.millionsend.model.ContactTopic;
 import com.millionsend.model.CreateBatchContactsResponse;
 import com.millionsend.model.CreateContactOptions;
+import com.millionsend.model.DataResponse;
 import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Id;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
+import com.millionsend.model.PreferencesLink;
 import com.millionsend.model.RemoveContactResponse;
+import com.millionsend.model.RemoveContactsOptions;
 import com.millionsend.model.UpdateContactOptions;
 import com.millionsend.model.UpdateContactTopicsOptions;
 import java.util.Collections;
@@ -52,7 +55,7 @@ public final class Contacts {
     return segments;
   }
 
-  /** Bulk creation ({@code contacts().batch().create(...)}), a MillionSend extension. */
+  /** Bulk creation and removal ({@code contacts().batch().create(...)} / {@code remove(...)}), MillionSend extensions. */
   public ContactsBatch batch() {
     return batch;
   }
@@ -88,6 +91,22 @@ public final class Contacts {
     return http.request(
         "DELETE", contactPath(address), null, null, null,
         new TypeReference<RemoveContactResponse>() {});
+  }
+
+  /** POST /contacts/{id}/preferences-link by a bare id. */
+  public PreferencesLink preferencesLink(String id) throws MillionSendException {
+    return preferencesLink(ContactAddress.id(id));
+  }
+
+  /**
+   * POST /contacts/{idOrEmail}/preferences-link — a MillionSend extension: the
+   * contact's hosted preference page (public topics plus the global
+   * unsubscribe). 422 when the instance cannot build hosted links.
+   */
+  public PreferencesLink preferencesLink(ContactAddress address) throws MillionSendException {
+    return http.request(
+        "POST", contactPath(address) + "/preferences-link", null, null, null,
+        new TypeReference<PreferencesLink>() {});
   }
 
   /** GET /contacts */
@@ -164,7 +183,7 @@ public final class Contacts {
     }
   }
 
-  /** Bulk contact creation: POST /contacts/batch, up to 1000 items. */
+  /** Bulk contact creation and removal, up to 1000 items per call. */
   public static final class ContactsBatch {
 
     private final HttpClient http;
@@ -197,6 +216,14 @@ public final class Contacts {
           "POST", "/contacts/batch", contacts,
           onConflict == null ? null : Collections.singletonMap("on_conflict", onConflict.getValue()),
           requestOptions, new TypeReference<CreateBatchContactsResponse>() {});
+    }
+
+    /** POST /contacts/batch/remove — by emails or by ids; lists only the rows actually deleted. */
+    public DataResponse<RemoveContactResponse> remove(RemoveContactsOptions options)
+        throws MillionSendException {
+      return http.request(
+          "POST", "/contacts/batch/remove", options, null, null,
+          new TypeReference<DataResponse<RemoveContactResponse>>() {});
     }
   }
 }

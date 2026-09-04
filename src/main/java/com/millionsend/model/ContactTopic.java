@@ -8,6 +8,7 @@ public final class ContactTopic {
   private String description;
   private Subscription subscription;
   private boolean explicit;
+  private String visibility;
 
   public String getId() {
     return id;
@@ -29,5 +30,10 @@ public final class ContactTopic {
   /** False when {@link #getSubscription()} is the topic default rather than the contact's choice. */
   public boolean isExplicit() {
     return explicit;
+  }
+
+  /** {@code public} or {@code private}; the hosted preference page lists public topics only. */
+  public String getVisibility() {
+    return visibility;
   }
 }

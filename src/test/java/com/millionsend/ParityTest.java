@@ -15,7 +15,9 @@ import com.millionsend.model.Attachment;
 import com.millionsend.model.BatchValidation;
 import com.millionsend.model.ConflictMode;
 import com.millionsend.model.Contact;
+import com.millionsend.model.ContactAddress;
 import com.millionsend.model.ContactProperty;
+import com.millionsend.model.DataResponse;
 import com.millionsend.model.CreateApiKeyOptions;
 import com.millionsend.model.CreateApiKeyResponse;
 import com.millionsend.model.CreateBatchContactsResponse;
@@ -32,7 +34,12 @@ import com.millionsend.model.CreateWebhookResponse;
 import com.millionsend.model.Domain;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListSuppressionsOptions;
+import com.millionsend.model.PreferencesLink;
+import com.millionsend.model.RemoveContactResponse;
+import com.millionsend.model.RemoveContactsOptions;
 import com.millionsend.model.RemoveSuppressionsOptions;
+import com.millionsend.model.RotateWebhookOptions;
+import com.millionsend.model.RotateWebhookResponse;
 import com.millionsend.model.Subscription;
 import com.millionsend.model.Suppression;
 import com.millionsend.model.SuppressionOrigin;
@@ -263,6 +270,46 @@ class ParityTest {
   }
 
   @Test
+  void contactsBatchRemove() throws Exception {
+    server.responseBody =
+        "{\"data\":[{\"object\":\"contact\",\"contact\":\"c1\",\"deleted\":true}]}";
+    DataResponse<RemoveContactResponse> res =
+        ms.contacts().batch().remove(RemoveContactsOptions.builder().id("c1").id("c2").build());
+    assertEquals("POST", server.method);
+    assertEquals("/contacts/batch/remove", server.path);
+    assertEquals(json("{\"ids\":[\"c1\",\"c2\"]}"), body());
+    assertEquals(1, res.getData().size());
+    assertEquals("c1", res.getData().get(0).getContact());
+    assertTrue(res.getData().get(0).getDeleted());
+
+    ms.contacts()
+        .batch()
+        .remove(RemoveContactsOptions.builder().emails(Arrays.asList("a@x.dev", "b@x.dev")).build());
+    assertEquals(json("{\"emails\":[\"a@x.dev\",\"b@x.dev\"]}"), body());
+    assertThrows(
+        IllegalArgumentException.class,
+        () -> RemoveContactsOptions.builder().id("x").email("y").build());
+    assertThrows(IllegalArgumentException.class, () -> RemoveContactsOptions.builder().build());
+  }
+
+  @Test
+  void contactPreferencesLink() throws Exception {
+    server.responseBody =
+        "{\"object\":\"preferences_link\",\"contact\":\"c1\","
+            + "\"url\":\"https://app.x.dev/unsubscribe/tok\"}";
+    PreferencesLink link = ms.contacts().preferencesLink("c1");
+    assertEquals("POST", server.method);
+    assertEquals("/contacts/c1/preferences-link", server.path);
+    assertEquals("", server.body);
+    assertEquals("preferences_link", link.getObject());
+    assertEquals("c1", link.getContact());
+    assertEquals("https://app.x.dev/unsubscribe/tok", link.getUrl());
+
+    ms.contacts().preferencesLink(ContactAddress.email("ada+1@x.dev"));
+    assertEquals("/contacts/ada%2B1%40x.dev/preferences-link", server.rawPath);
+  }
+
+  @Test
   void contactSegmentsAddRemove() throws Exception {
     ms.contacts().segments().add("c@x.dev", "s1");
     assertEquals("POST", server.method);
@@ -473,12 +520,14 @@ class ParityTest {
     server.responseBody =
         "{\"object\":\"webhook\",\"id\":\"w1\",\"endpoint\":\"https://x.dev/hook\","
             + "\"created_at\":\"2026-01-01T00:00:00.000Z\",\"status\":\"enabled\","
-            + "\"events\":[\"email.delivered\"],\"signing_secret\":\"whsec_abc\"}";
+            + "\"events\":[\"email.delivered\"],\"signing_secret\":\"whsec_abc\","
+            + "\"previous_secret_expires_at\":\"2026-01-02T00:00:00.000Z\"}";
     Webhook w = ms.webhooks().get("w1");
     assertEquals("GET", server.method);
     assertEquals("/webhooks/w1", server.path);
     assertEquals("whsec_abc", w.getSigningSecret());
     assertEquals("email.delivered", w.getEvents().get(0));
+    assertEquals("2026-01-02T00:00:00.000Z", w.getPreviousSecretExpiresAt());
 
     server.responseBody = "{\"object\":\"list\",\"data\":[],\"has_more\":false}";
     ms.webhooks().list();
@@ -495,6 +544,31 @@ class ParityTest {
     ms.webhooks().remove("w1");
     assertEquals("DELETE", server.method);
     assertEquals("/webhooks/w1", server.path);
+  }
+
+  @Test
+  void webhookRotate() throws Exception {
+    server.responseBody =
+        "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_new\","
+            + "\"previous_secret_expires_at\":\"2026-01-02T00:00:00.000Z\"}";
+    RotateWebhookResponse r = ms.webhooks().rotate("w1");
+    assertEquals("POST", server.method);
+    assertEquals("/webhooks/w1/rotate", server.path);
+    assertEquals(json("{}"), body());
+    assertEquals("whsec_new", r.getSigningSecret());
+    assertEquals("2026-01-02T00:00:00.000Z", r.getPreviousSecretExpiresAt());
+
+    server.responseBody =
+        "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_mine\","
+            + "\"previous_secret_expires_at\":null}";
+    r =
+        ms.webhooks()
+            .rotate("w1", RotateWebhookOptions.builder().signingSecret("whsec_mine").overlapHours(0).build());
+    assertEquals(json("{\"signing_secret\":\"whsec_mine\",\"overlap_hours\":0}"), body());
+    assertNull(r.getPreviousSecretExpiresAt());
+
+    ms.webhooks().rotate("w1", RotateWebhookOptions.builder().overlapHours(48).build());
+    assertEquals(json("{\"overlap_hours\":48}"), body());
   }
 
   @Test

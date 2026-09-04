@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.5.0</version>
+  <version>0.6.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.5.0'
+implementation 'com.millionsend:millionsend-java:0.6.0'
 ```
 
 Requires Java 11+.
@@ -168,6 +168,12 @@ ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
 ListResponse<ContactTopic> topics = ms.contacts().topics().list("ada@acme.dev"); // GET /contacts/{idOrEmail}/topics
 topics.getData().get(0).getSubscription(); // effective choice: the contact's own, else the topic default
 topics.getData().get(0).isExplicit();      // false when it is the topic default
+topics.getData().get(0).getVisibility();   // "public" | "private" — the hosted page lists public topics only
+
+// Preference-center link (MillionSend extension): the contact's hosted preference page,
+// the same one their emails' unsubscribe links open. No expiry — show it only to the contact.
+PreferencesLink link = ms.contacts().preferencesLink(ContactAddress.email("ada@acme.dev")); // POST /contacts/{idOrEmail}/preferences-link
+link.getUrl();                                                    // 422 when the instance cannot build hosted links
 
 // Segment membership
 ms.contacts().segments().add(contactIdOrEmail, segmentId);     // POST /contacts/{id}/segments/{segmentId}
@@ -180,6 +186,10 @@ CreateBatchContactsResponse res = ms.contacts().batch().create(items,
 res.getData();     // [{ index, id, status: created|updated|skipped }]
 res.getCounts();   // created / updated / skipped / failed
 res.getErrors();   // permissive mode: rejected items
+
+// Bulk removal (MillionSend extension): up to 1000 per call, by ids or by emails
+ms.contacts().batch().remove(RemoveContactsOptions.builder().emails(List.of(a, b)).build()); // or .ids(...)
+// → getData(): [{ contact, deleted: true }] for the rows actually deleted
 ```
 
 `Contact.getProperties()` returns `Map<String, ContactPropertyValue>` — each
@@ -278,13 +288,25 @@ CreateWebhookResponse w = ms.webhooks().create(CreateWebhookOptions.builder()
     .events(WebhookEvent.EMAIL_DELIVERED, WebhookEvent.EMAIL_BOUNCED)
     .build());
 w.getSigningSecret();           // verify payload signatures with this
-ms.webhooks().get(id);          // also returns the signing secret
+ms.webhooks().get(id);          // also returns the signing secret and previousSecretExpiresAt
 ms.webhooks().list();
 ms.webhooks().update(id, UpdateWebhookOptions.builder().status("disabled").build());
 ms.webhooks().remove(id);
+
+// Rotate the signing secret (MillionSend extension)
+RotateWebhookResponse r = ms.webhooks().rotate(id);                    // minted secret, default overlap
+ms.webhooks().rotate(id, RotateWebhookOptions.builder()
+    .signingSecret("whsec_...")   // bring your own; omit to mint
+    .overlapHours(48)             // 0-72 hours the previous secret keeps signing too; 0 drops it at once
+    .build());
+r.getSigningSecret();             // sign-with from now on
+r.getPreviousSecretExpiresAt();   // when the previous secret stops signing; null when none
 ```
 
-`deliverability.*` and `quota.*` events are MillionSend extensions.
+During the overlap every delivery carries both signatures, so a receiver
+holding either verifies. `deliverability.*`, `quota.*`, `contact.unsubscribed`,
+`contact.resubscribed`, `contact.topic_opt_in`, `contact.topic_opt_out` and
+`suppression.*` events are MillionSend extensions.
 
 ### API keys
 
@@ -355,7 +377,7 @@ Notes:
 - **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. The server keeps `/audiences/*` only as a compatibility shim; it is not part of this SDK. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
 - **Request options** use the same `RequestOptions` builder shape (`setIdempotencyKey`, `add(header, value)`), plus `batchValidation(...)`.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
-- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`.
+- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`.
 
 ## Build & test
 

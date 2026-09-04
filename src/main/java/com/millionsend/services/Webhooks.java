@@ -11,10 +11,13 @@ import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Id;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
+import com.millionsend.model.RotateWebhookOptions;
+import com.millionsend.model.RotateWebhookResponse;
 import com.millionsend.model.UpdateWebhookOptions;
 import com.millionsend.model.Webhook;
+import java.util.Collections;
 
-/** The {@code webhooks} resource: create, get, list, update, remove. */
+/** The {@code webhooks} resource: create, get, list, update, rotate, remove. */
 public final class Webhooks {
 
   private final HttpClient http;
@@ -51,6 +54,23 @@ public final class Webhooks {
   public Id update(String id, UpdateWebhookOptions options) throws MillionSendException {
     return http.request(
         "PATCH", "/webhooks/" + enc(id), options, null, null, new TypeReference<Id>() {});
+  }
+
+  /** POST /webhooks/{id}/rotate with the server defaults: a minted secret and the default overlap. */
+  public RotateWebhookResponse rotate(String id) throws MillionSendException {
+    return rotate(id, null);
+  }
+
+  /**
+   * POST /webhooks/{id}/rotate — a MillionSend extension. During the overlap
+   * window every delivery carries both the new and the previous signature.
+   */
+  public RotateWebhookResponse rotate(String id, RotateWebhookOptions options)
+      throws MillionSendException {
+    return http.request(
+        "POST", "/webhooks/" + enc(id) + "/rotate",
+        options == null ? Collections.emptyMap() : options, null, null,
+        new TypeReference<RotateWebhookResponse>() {});
   }
 
   /** DELETE /webhooks/{id} */

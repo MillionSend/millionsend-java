@@ -16,6 +16,7 @@ public final class Webhook {
   private String status;
   private List<String> events;
   private String signingSecret;
+  private String previousSecretExpiresAt;
 
   public String getObject() {
     return object;
@@ -44,5 +45,13 @@ public final class Webhook {
 
   public String getSigningSecret() {
     return signingSecret;
+  }
+
+  /**
+   * While set, deliveries are also signed with the secret a rotation replaced
+   * (only populated when a single webhook is fetched); null when no window is open.
+   */
+  public String getPreviousSecretExpiresAt() {
+    return previousSecretExpiresAt;
   }
 }

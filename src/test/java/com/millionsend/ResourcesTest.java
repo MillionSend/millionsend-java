@@ -155,7 +155,8 @@ class ResourcesTest {
   void contactTopicsList() throws Exception {
     server.responseBody =
         "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"t1\",\"name\":\"Insights\","
-            + "\"description\":null,\"subscription\":\"opt_in\",\"explicit\":false}]}";
+            + "\"description\":null,\"subscription\":\"opt_in\",\"explicit\":false,"
+            + "\"visibility\":\"public\"}]}";
     ListResponse<ContactTopic> res = ms.contacts().topics().list("ada+1@x.dev");
     assertEquals("GET", server.method);
     assertEquals("/contacts/ada%2B1%40x.dev/topics", server.rawPath);
@@ -168,6 +169,7 @@ class ResourcesTest {
     assertNull(t.getDescription());
     assertEquals(Subscription.OPT_IN, t.getSubscription());
     assertFalse(t.isExplicit());
+    assertEquals("public", t.getVisibility());
   }
 
   @Test

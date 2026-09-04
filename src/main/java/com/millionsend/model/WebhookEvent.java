@@ -21,7 +21,22 @@ public enum WebhookEvent {
   /** MillionSend extension. */
   QUOTA_REACHED("quota.reached"),
   /** MillionSend extension: sends are parked at the quota ceiling until the reset or an upgrade. */
-  QUOTA_PAUSED("quota.paused");
+  QUOTA_PAUSED("quota.paused"),
+  CONTACT_CREATED("contact.created"),
+  CONTACT_UPDATED("contact.updated"),
+  CONTACT_DELETED("contact.deleted"),
+  /** MillionSend extension. */
+  CONTACT_UNSUBSCRIBED("contact.unsubscribed"),
+  /** MillionSend extension. */
+  CONTACT_RESUBSCRIBED("contact.resubscribed"),
+  /** MillionSend extension. */
+  CONTACT_TOPIC_OPT_IN("contact.topic_opt_in"),
+  /** MillionSend extension. */
+  CONTACT_TOPIC_OPT_OUT("contact.topic_opt_out"),
+  /** MillionSend extension. */
+  SUPPRESSION_ADDED("suppression.added"),
+  /** MillionSend extension. */
+  SUPPRESSION_REMOVED("suppression.removed");
 
   private final String value;
 
