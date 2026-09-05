@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.6.0</version>
+  <version>0.7.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.6.0'
+implementation 'com.millionsend:millionsend-java:0.7.0'
 ```
 
 Requires Java 11+.
@@ -161,6 +161,10 @@ ms.contacts().update(UpdateContactOptions.builder()
     .id(id).unsubscribed(true).firstName(null).build()); // null clears a field
 ms.contacts().remove(ContactAddress.email("ada@acme.dev"));
 ms.contacts().list(ListOptions.builder().limit(50).build());
+// Bulk read (MillionSend extension): attach properties and topic subscriptions to every item,
+// so an audience reads in one request per 100 contacts instead of one per contact
+ms.contacts().list(ListContactsOptions.builder().limit(100)
+    .include(ContactInclude.PROPERTIES, ContactInclude.TOPICS).build()); // ?include=properties,topics
 
 // Topic subscriptions (granular unsubscribe)
 ms.contacts().topics().update(UpdateContactTopicsOptions.builder()
@@ -187,6 +191,13 @@ res.getData();     // [{ index, id, status: created|updated|skipped }]
 res.getCounts();   // created / updated / skipped / failed
 res.getErrors();   // permissive mode: rejected items
 
+// Bulk lookup (MillionSend extension): up to 1000 contacts by id or email in one request,
+// in request order; unknown entries are listed, not errors — one request against the rate limit
+BatchGetContactsResponse found = ms.contacts().batch().get(
+    List.of(ContactAddress.id(contactId), ContactAddress.email(email)), ContactInclude.TOPICS);
+found.getData();    // [{ object: "contact", id, email, ..., topics }] — the contacts found
+found.getMissing(); // [{ index, email }] — request entries that matched nobody
+
 // Bulk removal (MillionSend extension): up to 1000 per call, by ids or by emails
 ms.contacts().batch().remove(RemoveContactsOptions.builder().emails(List.of(a, b)).build()); // or .ids(...)
 // → getData(): [{ contact, deleted: true }] for the rows actually deleted
@@ -194,6 +205,8 @@ ms.contacts().batch().remove(RemoveContactsOptions.builder().emails(List.of(a, b
 
 `Contact.getProperties()` returns `Map<String, ContactPropertyValue>` — each
 value carries its declared `type` (`string`/`number`) and the `value`.
+`Contact.getTopics()` returns the same rows as `contacts().topics().list(...)`;
+on list and batch reads both are `null` unless `include` asked for them.
 
 ### Contact properties
 
@@ -250,6 +263,8 @@ ms.segments().create(CreateSegmentOptions.builder()
 ms.segments().get(id);   // includes a live contactCount
 ms.segments().list();
 ms.segments().contacts(id, ListOptions.builder().limit(100).build()); // matching contacts
+ms.segments().contacts(id, ListContactsOptions.builder()
+    .include(ContactInclude.PROPERTIES).build());                     // + properties per item
 ms.segments().update(id, UpdateSegmentOptions.builder().name("Pro tier").build());
 ms.segments().remove(id);
 ```

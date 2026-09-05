@@ -6,15 +6,18 @@ import com.fasterxml.jackson.core.type.TypeReference;
 import com.millionsend.MillionSendException;
 import com.millionsend.core.HttpClient;
 import com.millionsend.core.RequestOptions;
+import com.millionsend.model.BatchGetContactsResponse;
 import com.millionsend.model.ConflictMode;
 import com.millionsend.model.Contact;
 import com.millionsend.model.ContactAddress;
+import com.millionsend.model.ContactInclude;
 import com.millionsend.model.ContactTopic;
 import com.millionsend.model.CreateBatchContactsResponse;
 import com.millionsend.model.CreateContactOptions;
 import com.millionsend.model.DataResponse;
 import com.millionsend.model.DeletedResponse;
 import com.millionsend.model.Id;
+import com.millionsend.model.ListContactsOptions;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.PreferencesLink;
@@ -22,8 +25,12 @@ import com.millionsend.model.RemoveContactResponse;
 import com.millionsend.model.RemoveContactsOptions;
 import com.millionsend.model.UpdateContactOptions;
 import com.millionsend.model.UpdateContactTopicsOptions;
+import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.Collections;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The {@code contacts} resource. Contacts are team-global and addressable by id
@@ -55,7 +62,7 @@ public final class Contacts {
     return segments;
   }
 
-  /** Bulk creation and removal ({@code contacts().batch().create(...)} / {@code remove(...)}), MillionSend extensions. */
+  /** Bulk creation, lookup and removal ({@code contacts().batch().create(...)} / {@code get(...)} / {@code remove(...)}), MillionSend extensions. */
   public ContactsBatch batch() {
     return batch;
   }
@@ -111,11 +118,22 @@ public final class Contacts {
 
   /** GET /contacts */
   public ListResponse<Contact> list() throws MillionSendException {
-    return list(null);
+    return list((ListOptions) null);
   }
 
   /** GET /contacts with pagination. */
   public ListResponse<Contact> list(ListOptions options) throws MillionSendException {
+    return http.request(
+        "GET", "/contacts", null, options == null ? null : options.toQuery(), null,
+        new TypeReference<ListResponse<Contact>>() {});
+  }
+
+  /**
+   * GET /contacts?include=properties,topics — a MillionSend extension: attaches
+   * the property map and/or the topic subscriptions to every item, so an
+   * audience reads in one request per page instead of one per contact.
+   */
+  public ListResponse<Contact> list(ListContactsOptions options) throws MillionSendException {
     return http.request(
         "GET", "/contacts", null, options == null ? null : options.toQuery(), null,
         new TypeReference<ListResponse<Contact>>() {});
@@ -183,7 +201,7 @@ public final class Contacts {
     }
   }
 
-  /** Bulk contact creation and removal, up to 1000 items per call. */
+  /** Bulk contact creation, lookup and removal, up to 1000 items per call. */
   public static final class ContactsBatch {
 
     private final HttpClient http;
@@ -216,6 +234,33 @@ public final class Contacts {
           "POST", "/contacts/batch", contacts,
           onConflict == null ? null : Collections.singletonMap("on_conflict", onConflict.getValue()),
           requestOptions, new TypeReference<CreateBatchContactsResponse>() {});
+    }
+
+    /**
+     * POST /contacts/batch/get — up to 1000 contacts by id or email in one
+     * request (one request against the rate limit), returned in request order;
+     * entries that match no contact come back under {@code missing} instead of
+     * failing the call. Pass {@link ContactInclude} values to attach properties
+     * and/or topics to every contact.
+     */
+    public BatchGetContactsResponse get(List<ContactAddress> addresses, ContactInclude... include)
+        throws MillionSendException {
+      // The wire wants exactly one key per entry; email wins over id like everywhere else.
+      List<Map<String, String>> contacts = new ArrayList<>(addresses.size());
+      for (ContactAddress a : addresses) {
+        contacts.add(
+            a.getEmail() != null
+                ? Collections.singletonMap("email", a.getEmail())
+                : Collections.singletonMap("id", a.getId()));
+      }
+      Map<String, Object> body = new LinkedHashMap<>();
+      body.put("contacts", contacts);
+      if (include.length > 0) {
+        body.put("include", Arrays.asList(include));
+      }
+      return http.request(
+          "POST", "/contacts/batch/get", body, null, null,
+          new TypeReference<BatchGetContactsResponse>() {});
     }
 
     /** POST /contacts/batch/remove — by emails or by ids; lists only the rows actually deleted. */

@@ -8,6 +8,7 @@ import com.millionsend.core.HttpClient;
 import com.millionsend.model.Contact;
 import com.millionsend.model.CreateSegmentOptions;
 import com.millionsend.model.DeletedResponse;
+import com.millionsend.model.ListContactsOptions;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.Segment;
@@ -56,11 +57,24 @@ public final class Segments {
 
   /** GET /segments/{id}/contacts — the contacts currently matching the segment. */
   public ListResponse<Contact> contacts(String id) throws MillionSendException {
-    return contacts(id, null);
+    return contacts(id, (ListOptions) null);
   }
 
   /** GET /segments/{id}/contacts with pagination. */
   public ListResponse<Contact> contacts(String id, ListOptions options)
+      throws MillionSendException {
+    return http.request(
+        "GET", "/segments/" + enc(id) + "/contacts", null,
+        options == null ? null : options.toQuery(), null,
+        new TypeReference<ListResponse<Contact>>() {});
+  }
+
+  /**
+   * GET /segments/{id}/contacts?include=properties,topics — attaches the
+   * property map and/or the topic subscriptions to every item (a MillionSend
+   * extension).
+   */
+  public ListResponse<Contact> contacts(String id, ListContactsOptions options)
       throws MillionSendException {
     return http.request(
         "GET", "/segments/" + enc(id) + "/contacts", null,

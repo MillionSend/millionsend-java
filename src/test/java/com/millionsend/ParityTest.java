@@ -12,10 +12,12 @@ import com.millionsend.core.RequestOptions;
 import com.millionsend.model.AddSuppressionOptions;
 import com.millionsend.model.AddSuppressionsOptions;
 import com.millionsend.model.Attachment;
+import com.millionsend.model.BatchGetContactsResponse;
 import com.millionsend.model.BatchValidation;
 import com.millionsend.model.ConflictMode;
 import com.millionsend.model.Contact;
 import com.millionsend.model.ContactAddress;
+import com.millionsend.model.ContactInclude;
 import com.millionsend.model.ContactProperty;
 import com.millionsend.model.DataResponse;
 import com.millionsend.model.CreateApiKeyOptions;
@@ -32,7 +34,9 @@ import com.millionsend.model.CreateTopicOptions;
 import com.millionsend.model.CreateWebhookOptions;
 import com.millionsend.model.CreateWebhookResponse;
 import com.millionsend.model.Domain;
+import com.millionsend.model.ListContactsOptions;
 import com.millionsend.model.ListOptions;
+import com.millionsend.model.ListResponse;
 import com.millionsend.model.ListSuppressionsOptions;
 import com.millionsend.model.PreferencesLink;
 import com.millionsend.model.RemoveContactResponse;
@@ -293,6 +297,74 @@ class ParityTest {
   }
 
   @Test
+  void contactsBatchGet() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"data\":[{\"object\":\"contact\",\"id\":\"c1\",\"email\":\"a@x.dev\","
+            + "\"first_name\":null,\"last_name\":null,\"created_at\":\"2026-01-01T00:00:00.000Z\","
+            + "\"unsubscribed\":false,\"properties\":{\"seats\":{\"type\":\"number\",\"value\":3}},"
+            + "\"topics\":[]}],\"missing\":[{\"index\":1,\"email\":\"nobody@x.dev\"}]}";
+    BatchGetContactsResponse res =
+        ms.contacts()
+            .batch()
+            .get(
+                Arrays.asList(ContactAddress.id("c1"), ContactAddress.email("nobody@x.dev")),
+                ContactInclude.PROPERTIES,
+                ContactInclude.TOPICS);
+    assertEquals("POST", server.method);
+    assertEquals("/contacts/batch/get", server.path);
+    assertEquals(
+        json(
+            "{\"contacts\":[{\"id\":\"c1\"},{\"email\":\"nobody@x.dev\"}],"
+                + "\"include\":[\"properties\",\"topics\"]}"),
+        body());
+    assertEquals("list", res.getObject());
+    assertEquals(1, res.getData().size());
+    Contact c = res.getData().get(0);
+    assertEquals("c1", c.getId());
+    assertEquals(3, ((Number) c.getProperties().get("seats").getValue()).intValue());
+    assertTrue(c.getTopics().isEmpty());
+    assertEquals(1, res.getMissing().get(0).getIndex());
+    assertEquals("nobody@x.dev", res.getMissing().get(0).getEmail());
+    assertNull(res.getMissing().get(0).getId());
+
+    // No include → no key; an address with both set sends the email only.
+    ms.contacts()
+        .batch()
+        .get(Collections.singletonList(ContactAddress.builder().id("c1").email("a@x.dev").build()));
+    assertEquals(json("{\"contacts\":[{\"email\":\"a@x.dev\"}]}"), body());
+  }
+
+  @Test
+  void contactsListInclude() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"c1\",\"email\":\"c@x.dev\","
+            + "\"first_name\":null,\"last_name\":null,\"created_at\":\"2026-01-01T00:00:00.000Z\","
+            + "\"unsubscribed\":false,\"properties\":{\"plan\":{\"type\":\"string\",\"value\":\"pro\"}},"
+            + "\"topics\":[{\"id\":\"t1\",\"name\":\"Insights\",\"description\":null,"
+            + "\"subscription\":\"opt_out\",\"explicit\":true,\"visibility\":\"public\"}]}]}";
+    ListResponse<Contact> res =
+        ms.contacts()
+            .list(
+                ListContactsOptions.builder()
+                    .limit(5)
+                    .include(ContactInclude.PROPERTIES, ContactInclude.TOPICS)
+                    .build());
+    assertEquals("GET", server.method);
+    assertEquals("/contacts", server.path);
+    assertEquals("limit=5&include=properties%2Ctopics", server.query);
+    Contact c = res.getData().get(0);
+    assertEquals("pro", c.getProperties().get("plan").getValue());
+    assertEquals("t1", c.getTopics().get(0).getId());
+    assertEquals(Subscription.OPT_OUT, c.getTopics().get(0).getSubscription());
+    assertTrue(c.getTopics().get(0).isExplicit());
+
+    server.responseBody = "{\"object\":\"list\",\"data\":[],\"has_more\":false}";
+    res = ms.contacts().list(ListContactsOptions.builder().limit(5).build());
+    assertEquals("limit=5", server.query);
+    assertTrue(res.getData().isEmpty());
+  }
+
+  @Test
   void contactPreferencesLink() throws Exception {
     server.responseBody =
         "{\"object\":\"preferences_link\",\"contact\":\"c1\","
@@ -378,6 +450,11 @@ class ParityTest {
     assertEquals("GET", server.method);
     assertEquals("/segments/s1/contacts", server.path);
     assertEquals("after=c9", server.query);
+
+    ms.segments()
+        .contacts("s1", ListContactsOptions.builder().include(ContactInclude.TOPICS).build());
+    assertEquals("/segments/s1/contacts", server.path);
+    assertEquals("include=topics", server.query);
   }
 
   @Test
