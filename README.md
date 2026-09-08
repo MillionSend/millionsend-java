@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.7.0</version>
+  <version>0.8.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.7.0'
+implementation 'com.millionsend:millionsend-java:0.8.0'
 ```
 
 Requires Java 11+.
@@ -159,7 +159,9 @@ ms.contacts().get(ContactAddress.email("ada@acme.dev"));
 ms.contacts().get(contactId);                        // bare id shorthand
 ms.contacts().update(UpdateContactOptions.builder()
     .id(id).unsubscribed(true).firstName(null).build()); // null clears a field
-ms.contacts().remove(ContactAddress.email("ada@acme.dev"));
+ms.contacts().remove(ContactAddress.email("ada@acme.dev"));   // the contact's emails stay in the log
+ms.contacts().remove(RemoveContactOptions.builder()
+    .email("ada@acme.dev").erase(true).build());           // ?erase=true — also scrubs the address from history
 ms.contacts().list(ListOptions.builder().limit(50).build());
 // Bulk read (MillionSend extension): attach properties and topic subscriptions to every item,
 // so an audience reads in one request per 100 contacts instead of one per contact
@@ -198,8 +200,10 @@ BatchGetContactsResponse found = ms.contacts().batch().get(
 found.getData();    // [{ object: "contact", id, email, ..., topics }] — the contacts found
 found.getMissing(); // [{ index, email }] — request entries that matched nobody
 
-// Bulk removal (MillionSend extension): up to 1000 per call, by ids or by emails
+// Bulk removal (MillionSend extension): up to 1000 per call, by ids or by emails;
+// their emails stay in the log unless erase also scrubs the addresses from history
 ms.contacts().batch().remove(RemoveContactsOptions.builder().emails(List.of(a, b)).build()); // or .ids(...)
+ms.contacts().batch().remove(RemoveContactsOptions.builder().ids(List.of(a)).erase(true).build());
 // → getData(): [{ contact, deleted: true }] for the rows actually deleted
 ```
 

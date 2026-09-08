@@ -28,7 +28,7 @@ import java.util.Map;
 public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
-  public static final String VERSION = "0.7.0";
+  public static final String VERSION = "0.8.0";
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 

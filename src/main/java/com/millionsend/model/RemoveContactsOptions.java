@@ -6,13 +6,17 @@ import java.util.List;
 
 /**
  * Options for {@code contacts().batch().remove(...)}: either {@code emails}
- * or {@code ids} (up to 1000 each), never both.
+ * or {@code ids} (up to 1000 each), never both. A plain delete keeps the
+ * contacts' emails in the send log; set {@code erase} to also scrub the
+ * addresses from email history, event payloads and API logs (a GDPR/LGPD
+ * erasure).
  */
 @JsonInclude(JsonInclude.Include.NON_NULL)
 public final class RemoveContactsOptions {
 
   private List<String> emails;
   private List<String> ids;
+  private Boolean erase;
 
   private RemoveContactsOptions() {}
 
@@ -46,6 +50,12 @@ public final class RemoveContactsOptions {
         o.ids = new ArrayList<>();
       }
       o.ids.add(id);
+      return this;
+    }
+
+    /** Also scrub the addresses from email history, event payloads and API logs. */
+    public Builder erase(boolean erase) {
+      o.erase = erase;
       return this;
     }
 

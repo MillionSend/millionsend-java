@@ -39,6 +39,7 @@ import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.ListSuppressionsOptions;
 import com.millionsend.model.PreferencesLink;
+import com.millionsend.model.RemoveContactOptions;
 import com.millionsend.model.RemoveContactResponse;
 import com.millionsend.model.RemoveContactsOptions;
 import com.millionsend.model.RemoveSuppressionsOptions;
@@ -290,10 +291,30 @@ class ParityTest {
         .batch()
         .remove(RemoveContactsOptions.builder().emails(Arrays.asList("a@x.dev", "b@x.dev")).build());
     assertEquals(json("{\"emails\":[\"a@x.dev\",\"b@x.dev\"]}"), body());
+    ms.contacts().batch().remove(RemoveContactsOptions.builder().id("c1").erase(true).build());
+    assertEquals(json("{\"ids\":[\"c1\"],\"erase\":true}"), body());
     assertThrows(
         IllegalArgumentException.class,
         () -> RemoveContactsOptions.builder().id("x").email("y").build());
     assertThrows(IllegalArgumentException.class, () -> RemoveContactsOptions.builder().build());
+  }
+
+  @Test
+  void contactsRemoveErase() throws Exception {
+    server.responseBody = "{\"object\":\"contact\",\"contact\":\"c1\",\"deleted\":true}";
+    RemoveContactResponse res =
+        ms.contacts().remove(RemoveContactOptions.builder().email("a@x.dev").erase(true).build());
+    assertEquals("DELETE", server.method);
+    assertEquals("/contacts/a@x.dev", server.path);
+    assertEquals("erase=true", server.query);
+    assertTrue(res.getDeleted());
+
+    ms.contacts().remove(RemoveContactOptions.builder().id("c1").build());
+    assertEquals("/contacts/c1", server.path);
+    assertNull(server.query);
+
+    ms.contacts().remove(ContactAddress.id("c1"));
+    assertNull(server.query);
   }
 
   @Test

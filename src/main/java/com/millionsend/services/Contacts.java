@@ -21,6 +21,7 @@ import com.millionsend.model.ListContactsOptions;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.PreferencesLink;
+import com.millionsend.model.RemoveContactOptions;
 import com.millionsend.model.RemoveContactResponse;
 import com.millionsend.model.RemoveContactsOptions;
 import com.millionsend.model.UpdateContactOptions;
@@ -97,6 +98,17 @@ public final class Contacts {
   public RemoveContactResponse remove(ContactAddress address) throws MillionSendException {
     return http.request(
         "DELETE", contactPath(address), null, null, null,
+        new TypeReference<RemoveContactResponse>() {});
+  }
+
+  /**
+   * DELETE /contacts/{idOrEmail}?erase=true — a plain delete keeps the contact's
+   * emails in the send log; {@code erase} also scrubs the address from email
+   * history, event payloads and API logs (a GDPR/LGPD erasure).
+   */
+  public RemoveContactResponse remove(RemoveContactOptions options) throws MillionSendException {
+    return http.request(
+        "DELETE", contactPath(options.getId(), options.getEmail()), null, options.toQuery(), null,
         new TypeReference<RemoveContactResponse>() {});
   }
 
@@ -263,7 +275,7 @@ public final class Contacts {
           new TypeReference<BatchGetContactsResponse>() {});
     }
 
-    /** POST /contacts/batch/remove — by emails or by ids; lists only the rows actually deleted. */
+    /** POST /contacts/batch/remove — by emails or by ids; lists only the rows actually deleted. Their emails stay in the send log unless {@code erase} is set. */
     public DataResponse<RemoveContactResponse> remove(RemoveContactsOptions options)
         throws MillionSendException {
       return http.request(
