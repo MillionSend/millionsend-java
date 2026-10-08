@@ -73,6 +73,37 @@
 
   <profiles>
     <!--
+      CI's `lint` job, on the newest JDK only: -Xlint categories vary by javac
+      version, so the test matrix stays out of it. Doclint skips `missing`
+      because getters and builder methods carry no doc comment.
+    -->
+    <profile>
+      <id>lint</id>
+      <build>
+        <plugins>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-compiler-plugin</artifactId>
+            <configuration>
+              <failOnWarning>true</failOnWarning>
+              <compilerArgs>
+                <arg>-Xlint:all</arg>
+              </compilerArgs>
+            </configuration>
+          </plugin>
+          <plugin>
+            <groupId>org.apache.maven.plugins</groupId>
+            <artifactId>maven-javadoc-plugin</artifactId>
+            <version>3.12.0</version>
+            <configuration>
+              <doclint>all,-missing</doclint>
+              <failOnWarnings>true</failOnWarnings>
+            </configuration>
+          </plugin>
+        </plugins>
+      </build>
+    </profile>
+    <!--
       Central Portal release: sources + javadoc jars, GPG signatures, and the
       Central bundle upload are release-only requirements — the profile keeps
       plain `mvn verify` (CI matrix) free of them. Activated by release.yml.

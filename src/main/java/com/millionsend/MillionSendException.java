@@ -10,6 +10,9 @@ package com.millionsend;
  */
 public class MillionSendException extends Exception {
 
+  // The default the JVM computed before this was declared, so the serialized form is unchanged.
+  private static final long serialVersionUID = -5469809787528467192L;
+
   private final String name;
   private final Integer statusCode;
 
