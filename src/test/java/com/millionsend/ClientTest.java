@@ -168,6 +168,20 @@ class ClientTest {
   }
 
   @Test
+  void neverSendsAPathAnEmptyOrDotIdWouldRedirect() throws Exception {
+    try (MockServer server = new MockServer()) {
+      MillionSend ms = server.client();
+      assertThrows(IllegalArgumentException.class, () -> ms.inboxes().labels().remove("i1", ".."));
+      assertThrows(IllegalArgumentException.class, () -> ms.inboxes().threads().remove("i1", "."));
+      assertThrows(IllegalArgumentException.class, () -> ms.emails().get(""));
+      assertNull(server.method);
+      server.responseBody = "{\"object\":\"inbox_label\",\"id\":\"...\",\"deleted\":true}";
+      ms.inboxes().labels().remove("i1", "...");
+      assertEquals("/inboxes/i1/labels/...", server.rawPath);
+    }
+  }
+
+  @Test
   void stripsTrailingSlashFromBaseUrl() throws Exception {
     try (MockServer server = new MockServer()) {
       new MillionSend("ms_test", server.baseUrl() + "/").emails().get("e1");

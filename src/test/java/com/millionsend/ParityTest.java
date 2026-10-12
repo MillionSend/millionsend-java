@@ -895,8 +895,8 @@ class ParityTest {
   void receivingListCarriesEveryFilterAndHeldIds() throws Exception {
     server.responseBody =
         "{\"object\":\"list\",\"has_more\":false,\"data\":[" + RECEIVED_JSON + "],"
-            + "\"held\":[{\"id\":\"r2\",\"inbox_id\":\"i1\",\"reason\":\"not_allowlisted\","
-            + "\"created_at\":\"2026-10-12T10:00:01.000Z\"}]}";
+            + "\"held\":[{\"id\":\"r2\",\"inbox_id\":\"i1\",\"reason\":\"quarantined\","
+            + "\"quarantine_reason\":\"not_allowlisted\",\"created_at\":\"2026-10-12T10:00:01.000Z\"}]}";
     ReceivedEmailListResponse res =
         ms.receiving()
             .list(
@@ -919,7 +919,8 @@ class ParityTest {
             + "&from=y.dev&subject_contains=code&unread=true&include_quarantined=true",
         server.query);
     assertEquals("r2", res.getHeld().get(0).getId());
-    assertEquals("not_allowlisted", res.getHeld().get(0).getReason());
+    assertEquals("quarantined", res.getHeld().get(0).getReason());
+    assertEquals("not_allowlisted", res.getHeld().get(0).getQuarantineReason());
     ReceivedEmail e = res.getData().get(0);
     assertEquals("clean", e.getScreening().getVerdict());
     assertEquals("external", e.getScreening().getSenderTrust());

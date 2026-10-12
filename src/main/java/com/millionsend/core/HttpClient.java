@@ -134,6 +134,14 @@ public final class HttpClient {
       RequestOptions options,
       Duration timeout)
       throws MillionSendException {
+    // URL normalization resolves an empty, "." or ".." segment away, so an id such as
+    // ".." would send the request to another resource (DELETE /inboxes/{id}/labels/..
+    // deletes the inbox).
+    for (String segment : path.substring(1).split("/", -1)) {
+      if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
+        throw new IllegalArgumentException("An id in the request path is empty, \".\" or \"..\".");
+      }
+    }
 
     HttpRequest.Builder rb =
         HttpRequest.newBuilder(URI.create(baseUrl + path + queryString(query)))
