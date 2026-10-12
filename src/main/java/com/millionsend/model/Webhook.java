@@ -15,6 +15,7 @@ public final class Webhook {
   private String createdAt;
   private String status;
   private List<String> events;
+  private List<String> inboxIds;
   private String signingSecret;
   private String previousSecretExpiresAt;
 
@@ -41,6 +42,11 @@ public final class Webhook {
 
   public List<String> getEvents() {
     return events;
+  }
+
+  /** Inbox events and {@code email.received} for these inboxes only; {@code null} for every inbox. */
+  public List<String> getInboxIds() {
+    return inboxIds;
   }
 
   public String getSigningSecret() {

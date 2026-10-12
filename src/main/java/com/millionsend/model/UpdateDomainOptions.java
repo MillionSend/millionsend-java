@@ -52,6 +52,12 @@ public final class UpdateDomainOptions {
       return this;
     }
 
+    /** Accept mail to addresses without an inbox (a paid plan on MillionSend Cloud). */
+    public Builder receivingCatchAll(boolean receivingCatchAll) {
+      o.changes.put("receiving_catch_all", receivingCatchAll);
+      return this;
+    }
+
     public UpdateDomainOptions build() {
       return o;
     }

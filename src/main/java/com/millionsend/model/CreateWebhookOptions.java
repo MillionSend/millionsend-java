@@ -12,6 +12,7 @@ public final class CreateWebhookOptions {
   private String endpoint;
   private List<WebhookEvent> events;
   private String signingSecret;
+  private List<String> inboxIds;
 
   private CreateWebhookOptions() {}
 
@@ -40,6 +41,12 @@ public final class CreateWebhookOptions {
     /** Reuse an existing {@code whsec_…} secret instead of minting a new one. */
     public Builder signingSecret(String signingSecret) {
       o.signingSecret = signingSecret;
+      return this;
+    }
+
+    /** Deliver inbox events and {@code email.received} for these inboxes only. */
+    public Builder inboxIds(List<String> inboxIds) {
+      o.inboxIds = inboxIds;
       return this;
     }
 

@@ -1,17 +1,19 @@
 package com.millionsend.model;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
+import com.fasterxml.jackson.annotation.JsonValue;
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
-/** Options for {@code webhooks().update(...)}. All fields optional. */
-@JsonInclude(JsonInclude.Include.NON_NULL)
+/**
+ * Options for {@code webhooks().update(...)}. Only the fields you set are sent;
+ * {@code inboxIds(null)} removes the inbox filter.
+ */
 public final class UpdateWebhookOptions {
 
-  private String endpoint;
-  private List<WebhookEvent> events;
-  private String status;
+  private final Map<String, Object> changes = new LinkedHashMap<>();
 
   private UpdateWebhookOptions() {}
 
@@ -19,27 +21,38 @@ public final class UpdateWebhookOptions {
     return new Builder();
   }
 
+  /** The snake_case body to PATCH — only the fields the caller set. */
+  @JsonValue
+  public Map<String, Object> getChanges() {
+    return changes;
+  }
+
   public static final class Builder {
     private final UpdateWebhookOptions o = new UpdateWebhookOptions();
 
     public Builder endpoint(String endpoint) {
-      o.endpoint = endpoint;
+      o.changes.put("endpoint", endpoint);
       return this;
     }
 
     public Builder events(WebhookEvent... events) {
-      o.events = new ArrayList<>(Arrays.asList(events));
-      return this;
+      return events(new ArrayList<>(Arrays.asList(events)));
     }
 
     public Builder events(List<WebhookEvent> events) {
-      o.events = events;
+      o.changes.put("events", events);
       return this;
     }
 
     /** {@code enabled} or {@code disabled}. */
     public Builder status(String status) {
-      o.status = status;
+      o.changes.put("status", status);
+      return this;
+    }
+
+    /** Deliver inbox events and {@code email.received} for these inboxes only; {@code null} for every inbox. */
+    public Builder inboxIds(List<String> inboxIds) {
+      o.changes.put("inbox_ids", inboxIds);
       return this;
     }
 

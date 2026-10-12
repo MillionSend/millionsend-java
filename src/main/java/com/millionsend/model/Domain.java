@@ -19,6 +19,7 @@ public final class Domain {
   private boolean clickTracking;
   private String trackingSubdomain;
   private Map<String, String> capabilities;
+  private Boolean receivingCatchAll;
   private List<DomainRecord> records;
 
   public String getObject() {
@@ -61,6 +62,14 @@ public final class Domain {
   /** {@code sending} / {@code receiving} → {@code enabled} / {@code disabled}. */
   public Map<String, String> getCapabilities() {
     return capabilities;
+  }
+
+  /**
+   * On, mail to addresses without an inbox lands in the received list; off, those
+   * addresses are refused at SMTP time.
+   */
+  public Boolean getReceivingCatchAll() {
+    return receivingCatchAll;
   }
 
   public List<DomainRecord> getRecords() {

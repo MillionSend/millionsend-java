@@ -9,6 +9,7 @@ public final class CreateApiKeyOptions {
   private String name;
   private String permission;
   private String domainId;
+  private String inboxId;
 
   private CreateApiKeyOptions() {}
 
@@ -33,6 +34,15 @@ public final class CreateApiKeyOptions {
     /** Restrict a {@code sending_access} key to one domain. */
     public Builder domainId(String domainId) {
       o.domainId = domainId;
+      return this;
+    }
+
+    /**
+     * Restrict a {@code full_access} key to one inbox: it reads that inbox and sends
+     * from its address only. Not combinable with {@code domainId}.
+     */
+    public Builder inboxId(String inboxId) {
+      o.inboxId = inboxId;
       return this;
     }
 

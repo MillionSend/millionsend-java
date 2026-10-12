@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.8.0</version>
+  <version>0.9.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.8.0'
+implementation 'com.millionsend:millionsend-java:0.9.0'
 ```
 
 Requires Java 11+.
@@ -96,8 +96,9 @@ on templates) are forwarded as-is and answered with a 422.
 
 ### Request options
 
-`emails().send`, `batch().send` and `contacts().batch().create` accept a
-`RequestOptions` (the same builder shape as `resend-java`):
+`emails().send`, `batch().send`, `contacts().batch().create` and the inbox
+sends (`receiving().reply`/`forward`, `threads().emails().reply`/`forward`,
+`drafts().send`) accept a `RequestOptions` (the same builder shape as `resend-java`):
 
 ```java
 import com.millionsend.core.RequestOptions;
@@ -285,6 +286,111 @@ ms.suppressions().batch().add(AddSuppressionsOptions.builder().emails(List.of(a,
 ms.suppressions().batch().remove(RemoveSuppressionsOptions.builder().emails(List.of(a)).build()); // or .ids(...)
 ```
 
+### Receiving
+
+Mail received at your receiving domains and inboxes. Everything in a received
+email was written by its sender, so show its HTML only in a sandbox.
+
+```java
+ReceivedEmailListResponse page = ms.receiving().list(ListReceivedEmailsOptions.builder()
+    .inboxId(inboxId).from("acme.dev").subjectContains("code").limit(20).build()); // newest first
+ReceivedEmail email = ms.receiving().get(id);              // GET /emails/receiving/{id}
+ms.receiving().get(id, "cid");                             // leave inline images as cid: references
+email.getExtractedText();                                  // the reply without quotes, signature or hidden text
+email.getScreening().getSenderTrust();                     // owner, allowlisted, known_thread, external, …
+email.getExtracted().getCode();                            // a verification code, when one was found
+
+// Long-poll: returns as soon as matching mail arrives (or an empty page after 30 s)
+ReceivedEmailListResponse next = ms.receiving().list(ListReceivedEmailsOptions.builder()
+    .inboxId(inboxId).waitSeconds(30).build());
+next.getHeld();                                            // matching mail held in quarantine, ids only
+
+SendResult<ThreadEmail> r = ms.receiving().reply(id,
+    ReplyOptions.builder().text("Thanks, confirmed.").build(),
+    RequestOptions.idempotencyKey("reply-" + id));
+if (r.isDraft()) {
+  r.getDraft().getApprovalReasons();                       // held for a person to approve (HTTP 202)
+} else {
+  r.getSent().getThreadId();
+}
+ms.receiving().forward(id, ForwardOptions.builder().to("ops@acme.dev").mode("attachment").build());
+ms.receiving().remove(id);                                 // erase now
+
+ms.receiving().attachments().list(id);                     // signed download links, valid one hour
+ms.receiving().attachments().get(id, attachmentId);
+```
+
+Held mail is invisible to inbox-scoped keys: a detail read answers 403
+`email_quarantined`. `includeQuarantined(true)` lists it for full-access keys.
+
+### Inboxes
+
+An inbox is one address that receives mail, read by an agent (`kind` `agent`,
+the default) or by people (`human`), with threads in both directions. The
+paths mirror Resend's Inboxes API; `kind`, `shared`, `expiresAt`, safety,
+quarantine and codes are MillionSend extensions.
+
+```java
+Inbox inbox = ms.inboxes().create(CreateInboxOptions.builder()
+    .name("Signup bot").expiresIn("24h")   // no emailAddress: a random address on the shared domain
+    .safety(InboxSafetyOptions.builder().acceptFrom("anyone").build())
+    .build());
+ms.inboxes().list(ListInboxesOptions.builder().kind("agent").build());
+ms.inboxes().get("bot@acme.dev");                          // by id or address
+ms.inboxes().update(inbox.getId(), UpdateInboxOptions.builder().expiresIn(null).build()); // null: never expires
+ms.inboxes().remove(inbox.getId());
+
+// Verification codes and sign-in links (links are never fetched)
+VerificationCode code = ms.inboxes().codes().latest(inboxId,
+    LatestCodeOptions.builder().from("github.com").waitSeconds(30).build());
+if ("found".equals(code.getStatus())) {
+  code.getCode();                                          // or code.getUrl() for a sign-in link
+}
+
+// Safety rules (inbox-scoped keys can read them, never change them)
+ms.inboxes().safety().get(inboxId);
+ms.inboxes().safety().update(inboxId, InboxSafetyOptions.builder()
+    .acceptFrom("allowlist").allowlist("*@partner.dev").sendPolicy("reply_only").sendCap(100).build());
+
+// Quarantine: held mail is kept and listed until a person releases it
+ms.inboxes().quarantine().list(inboxId);
+ms.inboxes().quarantine().release(inboxId, emailId, true); // true also allowlists the sender
+
+// Threads and their emails
+ms.inboxes().threads().list(inboxId, ListThreadsOptions.builder().folders("inbox", "archive").read(false).build());
+ms.inboxes().threads().search(inboxId, SearchThreadsOptions.builder().query("invoice -draft").from("acme").build());
+ms.inboxes().threads().get(inboxId, threadId);
+ms.inboxes().threads().update(inboxId, threadId, UpdateThreadOptions.builder().read(true).folder("archive").build());
+ms.inboxes().threads().remove(inboxId, threadId);          // to trash, purged after 30 days
+ms.inboxes().threads().emails().list(inboxId, threadId);   // oldest first
+ms.inboxes().threads().emails().get(inboxId, threadId, emailId);
+ms.inboxes().threads().emails().reply(inboxId, threadId, emailId, ReplyOptions.builder().text("On it").build());
+ms.inboxes().threads().emails().forward(inboxId, threadId, emailId, ForwardOptions.builder().to("ops@acme.dev").build());
+
+// Labels
+InboxLabel label = ms.inboxes().labels().create(inboxId, InboxLabelOptions.builder().name("Billing").build());
+ms.inboxes().labels().list(inboxId);
+ms.inboxes().labels().update(inboxId, label.getId(), InboxLabelOptions.builder().color("#FF8800").build());
+ms.inboxes().labels().remove(inboxId, label.getId());
+
+// Drafts, including the ones the send rules hold for approval
+InboxDraft d = ms.inboxes().drafts().create(inboxId, CreateDraftOptions.builder()
+    .to("ada@example.com").subject("Hello").text("Hi Ada").build());
+ms.inboxes().drafts().list(inboxId);
+ms.inboxes().drafts().get(inboxId, d.getId());
+ms.inboxes().drafts().update(inboxId, d.getId(), UpdateDraftOptions.builder().subject(null).build()); // null clears
+SendResult<InboxDraft> s = ms.inboxes().drafts().send(inboxId, d.getId());
+ms.inboxes().drafts().reject(inboxId, d.getId());          // approvers only
+ms.inboxes().drafts().remove(inboxId, d.getId());
+```
+
+Reply, forward and draft send return a `SendResult`: `isDraft()` is true when
+the inbox's send rules held the message for a person (the API answers 202); an
+inbox-scoped key sending a pending draft gets 403 `approval_required`. Folder,
+verdict, kind and status values are plain strings, so new server values never
+break decoding. Hosted agent settings (`/inboxes/{id}/agent`) are not exposed:
+MillionSend runs no agent of its own.
+
 ### Domains
 
 ```java
@@ -296,8 +402,12 @@ ms.domains().get(id);
 ms.domains().list();
 ms.domains().verify(id);        // re-check DNS
 ms.domains().update(UpdateDomainOptions.builder().id(id).openTracking(true).trackingSubdomain(null).build()); // null clears
+ms.domains().update(UpdateDomainOptions.builder().id(id).receivingCatchAll(true).build()); // paid plans on Cloud
 ms.domains().remove(id);
 ```
+
+`Domain.getReceivingCatchAll()`: on, mail to addresses without an inbox lands in
+`receiving().list()`; off, those addresses are refused at SMTP time.
 
 ### Webhooks
 
@@ -327,6 +437,12 @@ holding either verifies. `deliverability.*`, `quota.*`, `contact.unsubscribed`,
 `contact.resubscribed`, `contact.topic_opt_in`, `contact.topic_opt_out` and
 `suppression.*` events are MillionSend extensions.
 
+`email.received` and the `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`)
+are delivered only to endpoints that name them; an endpoint subscribed to all
+events skips them. `inboxIds(...)` narrows them to some inboxes
+(`UpdateWebhookOptions.builder().inboxIds(null)` removes the filter).
+`inbox.expired` and `inbox.email.quarantined` are MillionSend extensions.
+
 ### API keys
 
 ```java
@@ -335,6 +451,9 @@ CreateApiKeyResponse k = ms.apiKeys().create(CreateApiKeyOptions.builder()
 k.getToken();                   // shown only once
 ms.apiKeys().list();
 ms.apiKeys().remove(id);
+
+// A key restricted to one inbox: it reads that inbox and sends from its address only
+ms.apiKeys().create(CreateApiKeyOptions.builder().name("support-agent").inboxId(inboxId).build());
 ```
 
 ### Templates
@@ -396,7 +515,7 @@ Notes:
 - **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. The server keeps `/audiences/*` only as a compatibility shim; it is not part of this SDK. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
 - **Request options** use the same `RequestOptions` builder shape (`setIdempotencyKey`, `add(header, value)`), plus `batchValidation(...)`.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
-- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`.
+- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`, and in `receiving()` and `inboxes()` the long-poll `waitSeconds`, the reply/forward/remove of received mail, inbox `safety()`, `codes()`, `quarantine()`, draft `reject()` and the extension fields.
 
 ## Build & test
 

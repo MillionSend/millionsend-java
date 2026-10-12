@@ -3,7 +3,7 @@ package com.millionsend.model;
 import java.util.List;
 
 /** The paginated list envelope {@code { object: "list", data, has_more }}. */
-public final class ListResponse<T> {
+public class ListResponse<T> {
 
   private String object;
   private List<T> data;

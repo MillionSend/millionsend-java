@@ -12,6 +12,8 @@ public enum WebhookEvent {
   EMAIL_COMPLAINED("email.complained"),
   EMAIL_OPENED("email.opened"),
   EMAIL_CLICKED("email.clicked"),
+  /** Mail received at a receiving domain or inbox. */
+  EMAIL_RECEIVED("email.received"),
   /** MillionSend extension. */
   DELIVERABILITY_WARNING("deliverability.warning"),
   /** MillionSend extension. */
@@ -36,7 +38,24 @@ public enum WebhookEvent {
   /** MillionSend extension. */
   SUPPRESSION_ADDED("suppression.added"),
   /** MillionSend extension. */
-  SUPPRESSION_REMOVED("suppression.removed");
+  SUPPRESSION_REMOVED("suppression.removed"),
+  // Inbox events reach only endpoints that name them; subscribing to all events skips them.
+  INBOX_CREATED("inbox.created"),
+  INBOX_UPDATED("inbox.updated"),
+  INBOX_DELETED("inbox.deleted"),
+  /** MillionSend extension. */
+  INBOX_EXPIRED("inbox.expired"),
+  INBOX_THREAD_CREATED("inbox.thread.created"),
+  INBOX_THREAD_FOLDER_UPDATED("inbox.thread.folder.updated"),
+  INBOX_THREAD_LABELS_UPDATED("inbox.thread.labels.updated"),
+  INBOX_EMAIL_RECEIVED("inbox.email.received"),
+  INBOX_EMAIL_SENT("inbox.email.sent"),
+  /** MillionSend extension. */
+  INBOX_EMAIL_QUARANTINED("inbox.email.quarantined"),
+  INBOX_DRAFT_CREATED("inbox.draft.created"),
+  INBOX_DRAFT_UPDATED("inbox.draft.updated"),
+  INBOX_DRAFT_SENT("inbox.draft.sent"),
+  INBOX_DRAFT_DELETED("inbox.draft.deleted");
 
   private final String value;
 
