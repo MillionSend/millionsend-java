@@ -321,7 +321,8 @@ ms.receiving().attachments().get(id, attachmentId);
 ```
 
 Held mail is invisible to inbox-scoped keys: a detail read answers 403
-`email_quarantined`. `includeQuarantined(true)` lists it for full-access keys.
+`email_quarantined`. For full-access keys, `includeQuarantined(true)` lists it
+too and `quarantined(true)` lists only held mail.
 
 ### Inboxes
 
@@ -437,10 +438,11 @@ holding either verifies. `deliverability.*`, `quota.*`, `contact.unsubscribed`,
 `contact.resubscribed`, `contact.topic_opt_in`, `contact.topic_opt_out` and
 `suppression.*` events are MillionSend extensions.
 
-`email.received` and the `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`)
-are delivered only to endpoints that name them; an endpoint subscribed to all
-events skips them. `inboxIds(...)` narrows them to some inboxes
-(`UpdateWebhookOptions.builder().inboxIds(null)` removes the filter).
+The `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`) are delivered
+only to endpoints that name them; an endpoint subscribed to all events skips
+them (it still gets `email.received`). `inboxIds(...)` narrows them and
+`email.received` to some inboxes (`UpdateWebhookOptions.builder().inboxIds(null)`
+removes the filter).
 `inbox.expired` and `inbox.email.quarantined` are MillionSend extensions.
 
 ### API keys

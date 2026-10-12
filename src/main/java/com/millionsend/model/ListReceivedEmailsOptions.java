@@ -21,6 +21,7 @@ public final class ListReceivedEmailsOptions {
   private String subjectContains;
   private Boolean unread;
   private boolean includeQuarantined;
+  private boolean quarantined;
 
   private ListReceivedEmailsOptions() {}
 
@@ -47,6 +48,9 @@ public final class ListReceivedEmailsOptions {
     Query.put(q, "unread", unread);
     if (includeQuarantined) {
       q.put("include_quarantined", "true");
+    }
+    if (quarantined) {
+      q.put("quarantined", "true");
     }
     return q;
   }
@@ -76,7 +80,7 @@ public final class ListReceivedEmailsOptions {
       return this;
     }
 
-    /** ISO 8601: only mail received after this instant. */
+    /** ISO 8601 with an offset, like {@code Instant.toString()}: only mail received after it. */
     public Builder since(String since) {
       o.since = since;
       return this;
@@ -113,6 +117,12 @@ public final class ListReceivedEmailsOptions {
     /** Also list held mail; needs a full access key that is not scoped to an inbox. */
     public Builder includeQuarantined(boolean includeQuarantined) {
       o.includeQuarantined = includeQuarantined;
+      return this;
+    }
+
+    /** List held mail only; needs a full access key that is not scoped to an inbox. */
+    public Builder quarantined(boolean quarantined) {
+      o.quarantined = quarantined;
       return this;
     }
 

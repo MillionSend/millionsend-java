@@ -33,6 +33,8 @@ import com.millionsend.model.UpdateInboxOptions;
 import com.millionsend.model.UpdateThreadOptions;
 import com.millionsend.model.VerificationCode;
 import java.util.Collections;
+import java.util.LinkedHashMap;
+import java.util.Map;
 
 /**
  * The {@code inboxes} resource: addresses that receive mail for an agent or for
@@ -338,18 +340,42 @@ public final class Inboxes {
     /** GET /inboxes/{inboxId}/threads/{threadId}/emails with pagination. */
     public ListResponse<ThreadEmail> list(String inboxId, String threadId, ListOptions options)
         throws MillionSendException {
+      return list(inboxId, threadId, options, false);
+    }
+
+    /**
+     * GET /inboxes/{inboxId}/threads/{threadId}/emails. {@code includeQuarantined} also lists
+     * held messages (owner views: a full access key not scoped to an inbox).
+     */
+    public ListResponse<ThreadEmail> list(
+        String inboxId, String threadId, ListOptions options, boolean includeQuarantined)
+        throws MillionSendException {
+      Map<String, String> query = options == null ? new LinkedHashMap<>() : options.toQuery();
+      if (includeQuarantined) {
+        query.put("include_quarantined", "true");
+      }
       return http.request(
-          "GET", thread(inboxId, threadId) + "/emails", null,
-          options == null ? null : options.toQuery(), null,
+          "GET", thread(inboxId, threadId) + "/emails", null, query, null,
           new TypeReference<ListResponse<ThreadEmail>>() {});
     }
 
     /** GET /inboxes/{inboxId}/threads/{threadId}/emails/{emailId} */
     public ThreadEmail get(String inboxId, String threadId, String emailId)
         throws MillionSendException {
+      return get(inboxId, threadId, emailId, false);
+    }
+
+    /**
+     * GET /inboxes/{inboxId}/threads/{threadId}/emails/{emailId}. {@code includeQuarantined}
+     * also reads a held message (owner views: a full access key not scoped to an inbox).
+     */
+    public ThreadEmail get(
+        String inboxId, String threadId, String emailId, boolean includeQuarantined)
+        throws MillionSendException {
       return http.request(
-          "GET", email(inboxId, threadId, emailId), null, null, null,
-          new TypeReference<ThreadEmail>() {});
+          "GET", email(inboxId, threadId, emailId), null,
+          includeQuarantined ? Collections.singletonMap("include_quarantined", "true") : null,
+          null, new TypeReference<ThreadEmail>() {});
     }
 
     /** POST …/emails/{emailId}/reply */

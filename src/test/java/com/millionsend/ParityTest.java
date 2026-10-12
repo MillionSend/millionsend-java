@@ -911,12 +911,13 @@ class ParityTest {
                     .subjectContains("code")
                     .unread(true)
                     .includeQuarantined(true)
+                    .quarantined(true)
                     .build());
     assertEquals("GET", server.method);
     assertEquals("/emails/receiving", server.path);
     assertEquals(
         "limit=5&after=r0&wait=20&since=2026-10-12T10%3A00%3A00Z&inbox_id=i1&to=bot%40x.dev"
-            + "&from=y.dev&subject_contains=code&unread=true&include_quarantined=true",
+            + "&from=y.dev&subject_contains=code&unread=true&include_quarantined=true&quarantined=true",
         server.query);
     assertEquals("r2", res.getHeld().get(0).getId());
     assertEquals("quarantined", res.getHeld().get(0).getReason());
@@ -929,7 +930,8 @@ class ParityTest {
     res = ms.receiving().list();
     assertNull(server.query);
     assertNull(res.getHeld());
-    ms.receiving().list(ListReceivedEmailsOptions.builder().includeQuarantined(false).build());
+    ms.receiving()
+        .list(ListReceivedEmailsOptions.builder().includeQuarantined(false).quarantined(false).build());
     assertNull(server.query);
   }
 
@@ -1392,12 +1394,19 @@ class ParityTest {
     assertEquals("inbound", inbound.getDirection());
     assertEquals("suspicious", inbound.getScreening().getVerdict());
     assertEquals("gray", inbound.getSpamVerdict());
+    ms.inboxes().threads().emails().list("i1", "t1", ListOptions.builder().after("r0").build(), true);
+    assertEquals("after=r0&include_quarantined=true", server.query);
+    ms.inboxes().threads().emails().list("i1", "t1");
+    assertNull(server.query);
 
     server.responseBody = SENT_JSON;
     ThreadEmail sentEmail = ms.inboxes().threads().emails().get("i1", "t1", "e9");
     assertEquals("/inboxes/i1/threads/t1/emails/e9", server.path);
+    assertNull(server.query);
     assertEquals("0", sentEmail.getAttachments().get(0).getId());
     assertEquals("queued", sentEmail.getStatus());
+    ms.inboxes().threads().emails().get("i1", "t1", "e9", true);
+    assertEquals("include_quarantined=true", server.query);
 
     SendResult<ThreadEmail> reply =
         ms.inboxes()
