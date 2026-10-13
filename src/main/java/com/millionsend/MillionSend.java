@@ -25,7 +25,7 @@ import com.millionsend.services.Webhooks;
  * CreateEmailResponse sent = ms.emails().send(
  *     CreateEmailOptions.builder()
  *         .from("Acme <onboarding@acme.dev>")
- *         .to("delivered@resend.dev")
+ *         .to("success@simulator.amazonses.com")
  *         .subject("Hello")
  *         .html("<strong>it works</strong>")
  *         .build());
