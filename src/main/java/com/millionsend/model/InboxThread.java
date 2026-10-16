@@ -56,7 +56,11 @@ public final class InboxThread {
     return read;
   }
 
-  /** Held messages in the thread; owner views only, else 0. */
+  /**
+   * Messages held in quarantine and not released; mail still being screened isn't counted.
+   * The summary always carries it (0 outside owner views); list and search items only with
+   * {@code includeQuarantined} in owner views, else {@code null}.
+   */
   public Integer getQuarantined() {
     return quarantined;
   }

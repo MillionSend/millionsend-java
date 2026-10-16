@@ -17,6 +17,7 @@ public class ListResponse<T> {
     return data;
   }
 
+  /** Whether more items follow in the direction of the cursor ({@code after} or {@code before}). */
   public boolean isHasMore() {
     return hasMore;
   }

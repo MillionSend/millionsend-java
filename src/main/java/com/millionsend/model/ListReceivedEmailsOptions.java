@@ -86,6 +86,7 @@ public final class ListReceivedEmailsOptions {
       return this;
     }
 
+    /** An inbox that doesn't exist answers 404 {@code not_found} at once, even with a wait. */
     public Builder inboxId(String inboxId) {
       o.inboxId = inboxId;
       return this;
@@ -108,7 +109,7 @@ public final class ListReceivedEmailsOptions {
       return this;
     }
 
-    /** Needs {@link #inboxId(String)}. */
+    /** Needs {@link #inboxId(String)}, except with an inbox-scoped key (its own inbox). */
     public Builder unread(boolean unread) {
       o.unread = unread;
       return this;

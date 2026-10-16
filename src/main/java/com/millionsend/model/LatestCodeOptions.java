@@ -9,6 +9,7 @@ public final class LatestCodeOptions {
   private String from;
   private Integer wait;
   private Integer maxAge;
+  private String since;
 
   private LatestCodeOptions() {}
 
@@ -26,6 +27,7 @@ public final class LatestCodeOptions {
     Query.put(q, "from", from);
     Query.put(q, "wait", wait);
     Query.put(q, "max_age", maxAge);
+    Query.put(q, "since", since);
     return q;
   }
 
@@ -44,9 +46,21 @@ public final class LatestCodeOptions {
       return this;
     }
 
-    /** Ignore codes older than this many seconds (60-86400; the API defaults to 600). */
+    /**
+     * Ignore codes delivered (or released from quarantine) more than this many seconds ago
+     * (60-86400; the API defaults to 600).
+     */
     public Builder maxAge(int seconds) {
       o.maxAge = seconds;
+      return this;
+    }
+
+    /**
+     * ISO 8601 with an offset, like {@code Instant.toString()}: only mail received after it.
+     * Pass the previous code's {@code receivedAt} so a second sign-in waits for its own code.
+     */
+    public Builder since(String since) {
+      o.since = since;
       return this;
     }
 

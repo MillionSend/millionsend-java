@@ -41,7 +41,10 @@ public final class Inbox {
     return emailAddress;
   }
 
-  /** The custom domain's id, or for a shared-domain inbox the team's shared subdomain id. */
+  /**
+   * The custom domain's id, or for a shared-domain inbox the id of the team's
+   * {@link Domain#isShared() shared} row of {@code domains().list()}.
+   */
   public String getDomainId() {
     return domainId;
   }
@@ -83,7 +86,10 @@ public final class Inbox {
     return shared;
   }
 
-  /** When the inbox stops receiving and is deleted; null for never. */
+  /**
+   * When the inbox stops receiving and is deleted; null for never. A shared-domain inbox
+   * unused for 90 days is deleted either way.
+   */
   public String getExpiresAt() {
     return expiresAt;
   }

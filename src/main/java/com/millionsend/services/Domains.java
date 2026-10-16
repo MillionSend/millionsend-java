@@ -12,7 +12,11 @@ import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
 import com.millionsend.model.UpdateDomainOptions;
 
-/** The {@code domains} resource: create, get, list, verify, update, remove. */
+/**
+ * The {@code domains} resource: create, get, list, verify, update, remove. The team's
+ * subdomain of the shared inbox domain is listed too, read-only ({@link Domain#isShared()}):
+ * update, verify and remove answer 403 {@code forbidden} on it.
+ */
 public final class Domains {
 
   private final HttpClient http;
@@ -37,7 +41,10 @@ public final class Domains {
     return list(null);
   }
 
-  /** GET /domains with pagination. */
+  /**
+   * GET /domains with pagination — the team's own domains newest first, then the shared row,
+   * alone on the next page when they exactly fill one.
+   */
   public ListResponse<Domain> list(ListOptions options) throws MillionSendException {
     return http.request(
         "GET", "/domains", null, options == null ? null : options.toQuery(), null,

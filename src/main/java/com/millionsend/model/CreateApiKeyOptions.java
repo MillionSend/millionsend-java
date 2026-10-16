@@ -31,7 +31,10 @@ public final class CreateApiKeyOptions {
       return this;
     }
 
-    /** Restrict a {@code sending_access} key to one domain. */
+    /**
+     * Restrict a {@code sending_access} key to one of your own domains; the
+     * {@link Domain#isShared() shared} row answers 422.
+     */
     public Builder domainId(String domainId) {
       o.domainId = domainId;
       return this;

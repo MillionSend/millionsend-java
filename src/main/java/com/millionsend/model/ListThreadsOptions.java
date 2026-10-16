@@ -77,7 +77,10 @@ public final class ListThreadsOptions {
       return this;
     }
 
-    /** Also count held mail (owner views: a full access key not scoped to an inbox). */
+    /**
+     * Also count held mail, so each item carries {@code quarantined} (owner views: a full
+     * access key not scoped to an inbox; an inbox-scoped key gets 403).
+     */
     public Builder includeQuarantined(boolean includeQuarantined) {
       o.includeQuarantined = includeQuarantined;
       return this;

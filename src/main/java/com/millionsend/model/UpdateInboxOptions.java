@@ -27,18 +27,19 @@ public final class UpdateInboxOptions {
   public static final class Builder {
     private final UpdateInboxOptions o = new UpdateInboxOptions();
 
+    /** 1-320 characters. */
     public Builder name(String name) {
       o.changes.put("name", name);
       return this;
     }
 
-    /** {@code ""} removes the display name. */
+    /** {@code ""} removes the display name; a new one is reviewed on the shared domain. */
     public Builder fromName(String fromName) {
       o.changes.put("from_name", fromName);
       return this;
     }
 
-    /** Like {@code 1h} or {@code 30d}, counted from now; {@code null} for never. */
+    /** From {@code 1h} to {@code 365d}, counted from now; {@code null} for never. */
     public Builder expiresIn(String expiresIn) {
       o.changes.put("expires_in", expiresIn);
       return this;

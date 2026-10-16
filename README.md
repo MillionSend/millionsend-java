@@ -70,9 +70,10 @@ new MillionSend(apiKey, baseUrl, true);  // also accept a non-loopback http:// b
 Every call throws a single checked `MillionSendException` on a non-2xx response.
 It carries the API's error shape:
 
-- `getName()` — a stable snake_case code you can switch on (`validation_error`, `not_found`, `restricted_api_key`, `sending_paused`, `all_recipients_suppressed`, …)
-- `getMessage()` — a human-readable description
+- `getName()` — a stable snake_case code you can switch on (`validation_error`, `not_found`, `forbidden`, `restricted_api_key`, `rate_limit_exceeded`, `sending_paused`, `all_recipients_suppressed`, …)
+- `getMessage()` — a human-readable description; it may change, so don't parse it
 - `getStatusCode()` — the HTTP status, or `null` when the request never reached the API (a client-side or transport failure)
+- `getRetryAfter()` — the response's `retry-after` header in seconds, or `null` when it has none
 
 ```java
 try {
@@ -87,6 +88,33 @@ try {
 `POST /emails` and `POST /emails/batch` answer `422 all_recipients_suppressed`
 ("All recipients are suppressed") when every `to` recipient is on the
 suppression list or opted out of the send's `topicId`.
+
+Inboxes add `inbox_send_policy` (403, a send the inbox's rules or the shared domain
+refuse; one they hold is a 202 draft), `inbox_send_cap_reached` (429, the inbox's daily
+cap, or the team's on the shared domain), `approval_required` (403), `email_quarantined`
+(403), `email_blocked` (410, a download of an email that carries malware), `too_many_waits`
+(429, too many concurrent long-polls) and `name_review_unavailable` (503, a name on the
+shared domain can't be reviewed right now).
+
+An unknown route answers `404 not_found`. Servers before v0.13.0 answer it in plain
+text, which surfaces as `application_error` with status 404.
+
+### Retries
+
+The SDK never retries on its own. Worth retrying after `getRetryAfter()` seconds:
+`503 name_review_unavailable`, `429 too_many_waits`, and `429 rate_limit_exceeded` when
+`getRetryAfter()` is 60 or less (the per-minute limits). Not worth retrying in the same
+process: `429 inbox_send_cap_reached` and the daily name-review budget (also
+`rate_limit_exceeded`, with a `getRetryAfter()` that runs to the next UTC midnight), and
+any 403, 404, 409 or 422.
+
+Retry a send with the same idempotency key (`emails().send`, `batch().send`, replies,
+forwards, `drafts().send`): a batch the API already accepted gets its stored response
+back, even if a recipient was refused or suppressed since. A held draft (`isDraft()`) is
+not a failure; never send it again. `inboxes().create` takes no idempotency key: after a
+429 or 503 nothing was created, but after a timeout a retry can create a second inbox.
+With a chosen `username`, a 409 on the retry usually means the first attempt succeeded:
+read it with `inboxes().get(address)`.
 
 ## Resources
 
@@ -113,6 +141,32 @@ ms.emails().send(options, opts);
 ms.emails().send(options, "order-123");            // the plain idempotency-key overload still works
 ```
 
+### Pagination
+
+List methods take `limit`, `after` and `before` (keyset cursors) and return a
+`ListResponse` (`getData()`, `isHasMore()`). Lists run newest first (MillionSend v0.13.0
+and later): `after` takes the last id of a page and pages toward older items, `before`
+takes the first id and pages toward newer ones, and `isHasMore()` refers to that
+direction. Threads sort by last activity, drafts by last update, a thread's emails run
+oldest first, and labels and topics are not paginated.
+
+```java
+// Incremental sync: page toward newer items, starting from the newest id you stored
+String before = newestStoredId;
+while (true) {
+  ListResponse<Email> page = ms.emails().list(ListOptions.builder().before(before).limit(100).build());
+  if (page.getData().isEmpty()) break;
+  save(page.getData());                           // newest first within the page
+  if (!page.isHasMore()) break;
+  before = page.getData().get(0).getId();
+}
+```
+
+A cursor whose item was deleted answers `422 validation_error` (`404 not_found` on the
+`inboxes()` lists): start again without a cursor and stop at the ids you already have.
+Servers before v0.13.0 list oldest first; walking every page with `after` returns every
+item on both.
+
 ### Emails
 
 ```java
@@ -134,6 +188,13 @@ accept one or more addresses. Also available: `.tag(new Tag(name, value))`,
 `.template(...)` (forwarded; the server answers 422 — send `html`/`text`).
 `resend-java`'s `addTag`/`addAttachment`/`addHeader` spellings work too.
 
+`subject` takes up to 998 characters. A `to`, `cc` or `bcc` address on a domain that
+can never receive mail (`example.com`, `.test`, `.invalid`, `.localhost`, a TLD that
+doesn't exist, …) answers `422 validation_error`; to test sending without emailing
+anyone, use `success@simulator.amazonses.com`. An inbox's address on the shared domain
+can be the `from` too, under the rules in
+[Sending from the shared domain](#sending-from-the-shared-domain).
+
 ### Batch
 
 ```java
@@ -144,6 +205,9 @@ res.getErrors();  // permissive mode: [{ index, message }] for rejected items; n
 ```
 
 Strict mode (the default) rejects the whole batch on the first invalid item.
+Batch items never send from the shared domain: a strict batch fails with
+`403 inbox_send_policy` (the message starts with `emails.<index>: `), a permissive one
+lists the item in `getErrors()`.
 
 ### Contacts
 
@@ -192,7 +256,7 @@ CreateBatchContactsResponse res = ms.contacts().batch().create(items,
     RequestOptions.builder().batchValidation(BatchValidation.PERMISSIVE).build());
 res.getData();     // [{ index, id, status: created|updated|skipped }]
 res.getCounts();   // created / updated / skipped / failed
-res.getErrors();   // permissive mode: rejected items
+res.getErrors();   // permissive mode: [{ index, statusCode, name, message }], as strict mode would answer
 
 // Bulk lookup (MillionSend extension): up to 1000 contacts by id or email in one request,
 // in request order; unknown entries are listed, not errors — one request against the rate limit
@@ -253,6 +317,9 @@ ms.broadcasts().send(id);      // send now
 ms.broadcasts().cancel(id);    // scheduled only
 ms.broadcasts().remove(id);    // draft only
 ```
+
+`subject` takes up to 998 characters. A broadcast never sends from the shared domain:
+`create` with `send(true)` and `send` answer `403 inbox_send_policy`.
 
 ### Segments (MillionSend extension)
 
@@ -322,7 +389,9 @@ ms.receiving().attachments().get(id, attachmentId);
 
 Held mail is invisible to inbox-scoped keys: a detail read answers 403
 `email_quarantined`. For full-access keys, `includeQuarantined(true)` lists it
-too and `quarantined(true)` lists only held mail.
+too and `quarantined(true)` lists only held mail. `unread(...)` needs `inboxId` with a
+team key; an inbox-scoped key reads its own inbox. An `inboxId` that doesn't exist
+answers `404 not_found` at once, even with `waitSeconds`.
 
 ### Inboxes
 
@@ -333,9 +402,12 @@ quarantine and codes are MillionSend extensions.
 
 ```java
 Inbox inbox = ms.inboxes().create(CreateInboxOptions.builder()
-    .name("Signup bot").expiresIn("24h")   // no emailAddress: a random address on the shared domain
+    .name("Signup bot")
+    .username("signup-bot")   // no emailAddress: signup-bot@<team>.<shared domain>; omit it for a random one
+    .expiresIn("24h")         // "1h" to "365d"; left out, the inbox never expires
     .safety(InboxSafetyOptions.builder().acceptFrom("anyone").build())
     .build());
+ms.inboxes().create(CreateInboxOptions.builder().domainId(domainId).username("orders").build()); // a domains().list() id: orders@ that domain
 ms.inboxes().list(ListInboxesOptions.builder().kind("agent").build());
 ms.inboxes().get("bot@acme.dev");                          // by id or address
 ms.inboxes().update(inbox.getId(), UpdateInboxOptions.builder().expiresIn(null).build()); // null: never expires
@@ -347,6 +419,9 @@ VerificationCode code = ms.inboxes().codes().latest(inboxId,
 if ("found".equals(code.getStatus())) {
   code.getCode();                                          // or code.getUrl() for a sign-in link
 }
+// The next sign-in: only a code received after the one already used
+ms.inboxes().codes().latest(inboxId,
+    LatestCodeOptions.builder().since(code.getReceivedAt()).waitSeconds(30).build());
 
 // Safety rules (inbox-scoped keys can read them, never change them)
 ms.inboxes().safety().get(inboxId);
@@ -359,6 +434,7 @@ ms.inboxes().quarantine().release(inboxId, emailId, true); // true also allowlis
 
 // Threads and their emails
 ms.inboxes().threads().list(inboxId, ListThreadsOptions.builder().folders("inbox", "archive").read(false).build());
+ms.inboxes().threads().list(inboxId, ListThreadsOptions.builder().includeQuarantined(true).build()); // owner views: getQuarantined() per thread
 ms.inboxes().threads().search(inboxId, SearchThreadsOptions.builder().query("invoice -draft").from("acme").build());
 ms.inboxes().threads().get(inboxId, threadId);
 ms.inboxes().threads().update(inboxId, threadId, UpdateThreadOptions.builder().read(true).folder("archive").build());
@@ -376,7 +452,7 @@ ms.inboxes().labels().remove(inboxId, label.getId());
 
 // Drafts, including the ones the send rules hold for approval
 InboxDraft d = ms.inboxes().drafts().create(inboxId, CreateDraftOptions.builder()
-    .to("ada@example.com").subject("Hello").text("Hi Ada").build());
+    .to("ada@acme.dev").subject("Hello").text("Hi Ada").build());
 ms.inboxes().drafts().list(inboxId);
 ms.inboxes().drafts().get(inboxId, d.getId());
 ms.inboxes().drafts().update(inboxId, d.getId(), UpdateDraftOptions.builder().subject(null).build()); // null clears
@@ -387,10 +463,49 @@ ms.inboxes().drafts().remove(inboxId, d.getId());
 
 Reply, forward and draft send return a `SendResult`: `isDraft()` is true when
 the inbox's send rules held the message for a person (the API answers 202); an
-inbox-scoped key sending a pending draft gets 403 `approval_required`. Folder,
-verdict, kind and status values are plain strings, so new server values never
-break decoding. Hosted agent settings (`/inboxes/{id}/agent`) are not exposed:
-MillionSend runs no agent of its own.
+inbox-scoped key sending a pending draft gets 403 `approval_required`. An agent's
+reply to a Reply-To at another organization is held that way too, with
+`reply_to_redirect` among its approval reasons. Folder, verdict, kind and status
+values are plain strings, so new server values never break decoding. Hosted agent
+settings (`/inboxes/{id}/agent`) are not exposed: MillionSend runs no agent of its own.
+
+An inbox never expires unless `expiresIn` says so, and its `name` takes up to 320
+characters. `domainId` takes a `domains().list()` row instead of `emailAddress`: the
+shared row works like leaving both out, and one of your own domains needs a `username`
+(and receiving on, or `forwarding(true)`).
+
+On the shared domain, an inbox unused for 90 days (no mail in or out, no API call on
+it) is deleted, which fires `inbox.expired`, then `inbox.deleted`. A chosen `username`
+or `fromName` there is reviewed first: reserved names (`postmaster`, `admin`, `support`,
+`noreply`, …), a `fwd-` prefix and look-alikes of brands answer 422, a username in use
+409, and `429 rate_limit_exceeded` means today's review budget is spent.
+`503 name_review_unavailable` means try again after `getRetryAfter()` seconds: the
+review is down, or the team's new subdomain still waits for its own, and then every
+shared or forwarding create gets it. Safety rules differ there too:
+`sendPolicy("allowlist")` answers 422, and so does `"open"` unless the shared row's
+`sendingMode` is `open`; `ownerAddresses` don't make senders trusted; `forwardTo` takes
+team members only.
+
+#### Sending from the shared domain
+
+What the team's shared addresses may send is the `getSendingMode()` of the shared row of
+`domains().list()`: `open` starts conversations, `reply_only` only answers inside a
+thread to its own correspondents, and `receive_only` sends nothing. An inbox whose name
+looks like a brand only replies, even under `open`. The same answers come back from
+`emails().send`, replies, forwards and drafts:
+
+| Status | `getName()` | When |
+| --- | --- | --- |
+| 403 | `inbox_send_policy` | the mode doesn't allow this send (`getSendingModeReason()` says whether the plan or the instance holds it), the inbox's name looks like a brand, or it is a batch or broadcast send |
+| 429 | `inbox_send_cap_reached` | the team's daily cap for mail from the shared domain; `getRetryAfter()` runs to the next UTC midnight |
+| 422 | `validation_error` | more than 10 distinct recipients across `to`, `cc` and `bcc` (`drafts().create` too); on `emails().send`, a `from` or a field the shared domain doesn't take |
+
+`emails().send` takes a shared address in `open` mode only: the inbox's exact
+`emailAddress` (no +tag), a display name left out or equal to its `fromName`, and no
+`replyTo`, `attachments`, `headers` or `scheduledAt`. A key restricted to a domain gets
+`403 restricted_api_key`. A person or a team key sending a draft skips the inbox's own
+rules, never the shared domain's. Switch on `getName()` and `getStatusCode()`; the
+messages may change.
 
 ### Domains
 
@@ -409,6 +524,27 @@ ms.domains().remove(id);
 
 `Domain.getReceivingCatchAll()`: on, mail to addresses without an inbox lands in
 `receiving().list()`; off, those addresses are refused at SMTP time.
+
+On an instance with a shared inbox domain, the team's subdomain of it is the last row
+of `domains().list()` (`isShared()` is true; MillionSend v0.14.0 and later). It is
+verified, has no DNS records, and its id is the `domainId` of the team's shared
+inboxes. Its `getSendingMode()` (`open`, `reply_only` or `receive_only`) says what those
+inboxes may send, and `getSendingModeReason()` (`plan` or `instance`, `null` under
+`open`) why it is held below `open`. It is read-only: `update`, `verify` and `remove`
+answer `403 forbidden`, and an API key can't be restricted to it. It comes after every
+own domain whatever its `createdAt`, alone on the next page when they exactly fill one.
+A team whose new subdomain still waits for its name review has no such row yet. Older
+servers send no `shared`, which reads as `false`.
+
+It sends only from its inboxes' own addresses, so leave it out when picking a domain to
+send from:
+
+```java
+Domain sender = ms.domains().list(ListOptions.builder().limit(100).build()).getData().stream()
+    .filter(d -> "verified".equals(d.getStatus()) && !d.isShared())
+    .findFirst()
+    .orElse(null);
+```
 
 ### Webhooks
 
@@ -443,7 +579,8 @@ only to endpoints that name them; an endpoint subscribed to all events skips
 them (it still gets `email.received`). `inboxIds(...)` narrows them and
 `email.received` to some inboxes (`UpdateWebhookOptions.builder().inboxIds(null)`
 removes the filter).
-`inbox.expired` and `inbox.email.quarantined` are MillionSend extensions.
+`inbox.expired` and `inbox.email.quarantined` are MillionSend extensions. Inbox events
+from sends made in the dashboard carry `data.source: "dashboard"`.
 
 ### API keys
 
@@ -457,6 +594,9 @@ ms.apiKeys().remove(id);
 // A key restricted to one inbox: it reads that inbox and sends from its address only
 ms.apiKeys().create(CreateApiKeyOptions.builder().name("support-agent").inboxId(inboxId).build());
 ```
+
+`domainId` takes one of your own domains: the shared row of `domains().list()` answers
+`422 validation_error`.
 
 ### Templates
 
@@ -496,6 +636,21 @@ u.getLimits().getEmailsPerDay();    // null when unlimited
 u.getToday().getEmailsSent();
 ```
 
+## Server versions
+
+Each feature needs this MillionSend version or later. Older instances answer 404 on
+paths they lack and ignore options they don't know, so an inbox created with `username`
+or `domainId` on one can get another address (check its `getEmailAddress()`), and before
+v0.13.0 `since` is ignored, so the code already used can come back.
+
+| MillionSend | Features |
+| --- | --- |
+| v0.10.0 | `inboxes()`; the receiving long-poll, inbox filters, `reply` and `forward` |
+| v0.11.0 | 422 for recipients that can never receive mail; a batch idempotency key replayed before validation |
+| v0.12.0 | `username`; inboxes that never expire by default; sends from the shared domain under its mode; `name_review_unavailable`; `statusCode` and `name` on contacts batch errors |
+| v0.13.0 | newest-first lists; `since` on `codes().latest`; `quarantined` on thread items; inbox names up to 320 characters; `unread` with an inbox-scoped key; a JSON 404 for unknown routes |
+| v0.14.0 | the shared row of `domains().list()` (`isShared()`, `getSendingMode()`, `getSendingModeReason()`); `domainId` on `inboxes().create`; `subject` up to 998 characters |
+
 ## Migrating from Resend
 
 ```diff
@@ -517,7 +672,7 @@ Notes:
 - **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. The server keeps `/audiences/*` only as a compatibility shim; it is not part of this SDK. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
 - **Request options** use the same `RequestOptions` builder shape (`setIdempotencyKey`, `add(header, value)`), plus `batchValidation(...)`.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
-- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`, and in `receiving()` and `inboxes()` the long-poll `waitSeconds`, the reply/forward/remove of received mail, inbox `safety()`, `codes()`, `quarantine()`, draft `reject()` and the extension fields.
+- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`, `MillionSendException.getRetryAfter()`, and in `receiving()` and `inboxes()` the long-poll `waitSeconds`, the reply/forward/remove of received mail, inbox `safety()`, `codes()`, `quarantine()`, draft `reject()`, the `username` and `domainId` of `inboxes().create` and the extension fields.
 
 ## Build & test
 

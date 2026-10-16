@@ -89,7 +89,16 @@ public final class Inboxes {
     return drafts;
   }
 
-  /** POST /inboxes — 409 when the address is taken, 403 at the plan's inbox limit. */
+  /**
+   * POST /inboxes — 409 when the address is taken, 403 at the plan's inbox limit. On the
+   * shared domain a chosen {@code username} or {@code fromName} is reviewed first: 503
+   * {@code name_review_unavailable} means try again after
+   * {@link MillionSendException#getRetryAfter()} seconds (the review is down, or the team's
+   * new subdomain still awaits its own, which holds every shared or forwarding create), and
+   * 429 {@code rate_limit_exceeded} that today's review budget is spent. There is no
+   * idempotency key: after a 503 or 429 nothing was created, but after a timeout a retry can
+   * create a second inbox.
+   */
   public Inbox create(CreateInboxOptions options) throws MillionSendException {
     return http.request("POST", "/inboxes", options, null, null, new TypeReference<Inbox>() {});
   }
@@ -111,7 +120,10 @@ public final class Inboxes {
     return http.request("GET", inbox(idOrEmail), null, null, null, new TypeReference<Inbox>() {});
   }
 
-  /** PATCH /inboxes/{id} — returns the updated inbox. */
+  /**
+   * PATCH /inboxes/{id} — returns the updated inbox. A new {@code fromName} on the shared
+   * domain is reviewed as on {@link #create}, with the same 503 and 429.
+   */
   public Inbox update(String id, UpdateInboxOptions options) throws MillionSendException {
     return http.request("PATCH", inbox(id), options, null, null, new TypeReference<Inbox>() {});
   }

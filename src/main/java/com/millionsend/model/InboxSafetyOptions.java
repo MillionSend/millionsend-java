@@ -47,6 +47,10 @@ public final class InboxSafetyOptions {
       return this;
     }
 
+    /**
+     * Owners besides the team members' login addresses; on the shared domain they don't make
+     * senders trusted.
+     */
     public Builder ownerAddresses(List<String> ownerAddresses) {
       o.changes.put("owner_addresses", ownerAddresses);
       return this;
@@ -62,7 +66,11 @@ public final class InboxSafetyOptions {
       return this;
     }
 
-    /** {@code reply_only}, {@code allowlist} or {@code open}. */
+    /**
+     * {@code reply_only}, {@code allowlist} or {@code open}. On the shared domain
+     * {@code allowlist} answers 422, and so does {@code open} unless the shared row's
+     * {@code sendingMode} is {@code open}.
+     */
     public Builder sendPolicy(String sendPolicy) {
       o.changes.put("send_policy", sendPolicy);
       return this;
@@ -84,7 +92,10 @@ public final class InboxSafetyOptions {
       return this;
     }
 
-    /** Team members' login addresses or owner addresses that get a copy of every message. */
+    /**
+     * Team members' login addresses or owner addresses that get a copy of every message; on
+     * the shared domain, team members only.
+     */
     public Builder forwardTo(List<String> forwardTo) {
       o.changes.put("forward_to", forwardTo);
       return this;

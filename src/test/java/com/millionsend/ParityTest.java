@@ -209,6 +209,8 @@ class ParityTest {
     assertEquals("e1", res.getData().get(0).getId());
     assertEquals(1, res.getErrors().get(0).getIndex());
     assertEquals("emails.1: bad", res.getErrors().get(0).getMessage());
+    assertNull(res.getErrors().get(0).getStatusCode());
+    assertNull(res.getErrors().get(0).getName());
 
     server.responseBody = "{\"data\":[{\"id\":\"e1\"}]}";
     res = ms.batch().send(Collections.singletonList(
@@ -276,7 +278,8 @@ class ParityTest {
     server.responseBody =
         "{\"data\":[{\"object\":\"contact\",\"index\":0,\"id\":\"c1\",\"status\":\"created\"}],"
             + "\"counts\":{\"created\":1,\"updated\":0,\"skipped\":0,\"failed\":1},"
-            + "\"errors\":[{\"index\":1,\"message\":\"invalid email\"}]}";
+            + "\"errors\":[{\"index\":1,\"statusCode\":422,\"name\":\"validation_error\","
+            + "\"message\":\"invalid email\"}]}";
     CreateBatchContactsResponse res =
         ms.contacts()
             .batch()
@@ -296,6 +299,8 @@ class ParityTest {
     assertEquals(1, res.getCounts().getCreated());
     assertEquals(1, res.getCounts().getFailed());
     assertEquals("invalid email", res.getErrors().get(0).getMessage());
+    assertEquals(422, res.getErrors().get(0).getStatusCode());
+    assertEquals("validation_error", res.getErrors().get(0).getName());
 
     ms.contacts().batch().create(Collections.singletonList(CreateContactOptions.builder().email("a@x.dev").build()));
     assertNull(server.query);
@@ -623,6 +628,61 @@ class ParityTest {
     assertEquals("/domains/d1", server.path);
   }
 
+  static final String SHARED_DOMAIN_JSON =
+      "{\"object\":\"domain\",\"id\":\"sd1\",\"name\":\"acme.agents.dev\",\"status\":\"verified\","
+          + "\"created_at\":\"2026-10-01T00:00:00.000Z\",\"region\":\"us-east-1\","
+          + "\"open_tracking\":false,\"click_tracking\":false,\"tracking_subdomain\":null,"
+          + "\"capabilities\":{\"sending\":\"enabled\",\"receiving\":\"enabled\"},"
+          + "\"receiving_catch_all\":false,\"shared\":true,\"sending_mode\":\"reply_only\","
+          + "\"sending_mode_reason\":\"plan\",\"records\":[]}";
+
+  @Test
+  void sharedDomainRow() throws Exception {
+    server.responseBody = SHARED_DOMAIN_JSON;
+    Domain shared = ms.domains().get("sd1");
+    assertEquals("domain", shared.getObject());
+    assertTrue(shared.isShared());
+    assertEquals("verified", shared.getStatus());
+    assertEquals("reply_only", shared.getSendingMode());
+    assertEquals("plan", shared.getSendingModeReason());
+    assertEquals("enabled", shared.getCapabilities().get("receiving"));
+    assertFalse(shared.getReceivingCatchAll());
+    assertNull(shared.getTrackingSubdomain());
+    assertTrue(shared.getRecords().isEmpty());
+
+    // A server before v0.14.0 sends no shared key; own domains never carry a sending mode.
+    server.responseBody = DOMAIN_JSON;
+    Domain own = ms.domains().get("d1");
+    assertFalse(own.isShared());
+    assertNull(own.getSendingMode());
+    assertNull(own.getSendingModeReason());
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":["
+            + DOMAIN_JSON.replace("\"records\"", "\"shared\":false,\"records\"") + ","
+            + SHARED_DOMAIN_JSON
+                .replace("reply_only", "a_mode_from_a_newer_server")
+                .replace("\"plan\"", "null")
+            + "]}";
+    ListResponse<Domain> list = ms.domains().list();
+    assertFalse(list.getData().get(0).isShared());
+    Domain last = list.getData().get(1);
+    assertTrue(last.isShared());
+    assertEquals("a_mode_from_a_newer_server", last.getSendingMode());
+    assertNull(last.getSendingModeReason());
+
+    server.status = 403;
+    server.responseBody =
+        "{\"statusCode\":403,\"name\":\"forbidden\",\"message\":\"acme.agents.dev is your team's "
+            + "subdomain of the shared domain: it can't be changed or deleted\"}";
+    MillionSendException e =
+        assertThrows(
+            MillionSendException.class,
+            () -> ms.domains().update(UpdateDomainOptions.builder().id("sd1").openTracking(true).build()));
+    assertEquals("forbidden", e.getName());
+    assertEquals(403, e.getStatusCode());
+  }
+
   @Test
   void webhooks() throws Exception {
     server.responseBody = "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_abc\"}";
@@ -933,6 +993,19 @@ class ParityTest {
     ms.receiving()
         .list(ListReceivedEmailsOptions.builder().includeQuarantined(false).quarantined(false).build());
     assertNull(server.query);
+
+    // An inbox-scoped key reads its own inbox's unread mail without naming it.
+    ms.receiving().list(ListReceivedEmailsOptions.builder().unread(false).build());
+    assertEquals("unread=false", server.query);
+
+    server.status = 404;
+    server.responseBody = "{\"statusCode\":404,\"name\":\"not_found\",\"message\":\"Inbox not found.\"}";
+    MillionSendException missing =
+        assertThrows(
+            MillionSendException.class,
+            () -> ms.receiving().list(ListReceivedEmailsOptions.builder().inboxId("i9").waitSeconds(30).build()));
+    assertEquals("not_found", missing.getName());
+    assertEquals(404, missing.getStatusCode());
   }
 
   @Test
@@ -1082,7 +1155,7 @@ class ParityTest {
       "{\"object\":\"inbox\",\"id\":\"i1\",\"name\":\"Signup bot\",\"email_address\":\"bot-7f3k@acme.agents.dev\","
           + "\"domain_id\":\"sd1\",\"receiving_address\":null,\"from_name\":null,\"unread\":2,\"drafts\":1,"
           + "\"last_received\":null,\"created_at\":\"2026-10-12T10:00:00.000Z\",\"kind\":\"agent\","
-          + "\"shared\":true,\"expires_at\":\"2026-10-13T10:00:00.000Z\",\"quarantined\":3,"
+          + "\"shared\":true,\"expires_at\":null,\"quarantined\":3,"
           + "\"pending_approval\":1}";
 
   @Test
@@ -1112,6 +1185,8 @@ class ParityTest {
     assertEquals("i1", created.getId());
     assertEquals("agent", created.getKind());
     assertTrue(created.getShared());
+    assertEquals("sd1", created.getDomainId());
+    assertNull(created.getExpiresAt());
     assertEquals(3, created.getQuarantined());
     assertEquals(1, created.getPendingApproval());
     assertEquals(2, created.getUnread());
@@ -1119,6 +1194,12 @@ class ParityTest {
     server.status = 200;
     ms.inboxes().create(CreateInboxOptions.builder().build());
     assertEquals(json("{}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().username("signup-bot").build());
+    assertEquals(json("{\"username\":\"signup-bot\"}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().domainId("sd1").build());
+    assertEquals(json("{\"domain_id\":\"sd1\"}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().domainId("d1").username("support").build());
+    assertEquals(json("{\"domain_id\":\"d1\",\"username\":\"support\"}"), body());
 
     server.responseBody =
         "{\"object\":\"list\",\"has_more\":true,\"data\":[{\"id\":\"i1\",\"name\":null,"
@@ -1206,6 +1287,8 @@ class ParityTest {
     assertEquals("GET", server.method);
     assertEquals("/inboxes/i1/codes/latest", server.path);
     assertEquals("from=y.dev&wait=10&max_age=600", server.query);
+    ms.inboxes().codes().latest("i1", LatestCodeOptions.builder().since("2026-10-16T12:00:00.000Z").build());
+    assertEquals("since=2026-10-16T12%3A00%3A00.000Z", server.query);
     assertEquals("found", code.getStatus());
     assertEquals("482913", code.getCode());
     assertTrue(code.getLinkDomainMatchesSender());
@@ -1310,6 +1393,12 @@ class ParityTest {
     assertEquals(2, t.getMessageCount());
     assertTrue(t.getHasDraft());
     assertNull(t.getSubject());
+    assertNull(t.getQuarantined());
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[" + THREAD_ITEM_JSON + ",\"quarantined\":2}]}";
+    list = ms.inboxes().threads().list("i1", ListThreadsOptions.builder().includeQuarantined(true).build());
+    assertEquals(2, list.getData().get(0).getQuarantined());
 
     ms.inboxes().threads().list("i1");
     assertNull(server.query);

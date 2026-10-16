@@ -99,7 +99,10 @@ public final class InboxDraft {
     return status;
   }
 
-  /** Why the send rules held it, e.g. {@code send_policy}, {@code ramp}, {@code private_code}. */
+  /**
+   * Why the send rules held it, e.g. {@code send_policy}, {@code ramp}, {@code private_code},
+   * or {@code reply_to_redirect} for an agent's reply to a Reply-To at another organization.
+   */
   public List<String> getApprovalReasons() {
     return approvalReasons;
   }
