@@ -182,9 +182,16 @@ public final class HttpClient {
 
     int status = response.statusCode();
     if (status < 200 || status >= 300) {
-      throw toException(response.body(), status);
+      throw toException(response.body(), status, retryAfterSeconds(response));
     }
     return response;
+  }
+
+  /** {@code retry-after} in whole seconds, the only form the API sends; {@code null} otherwise. */
+  private static Integer retryAfterSeconds(HttpResponse<String> response) {
+    String value = response.headers().firstValue("retry-after").orElse("").trim();
+    // At most nine digits, so the value always fits an int.
+    return value.matches("\\d{1,9}") ? Integer.valueOf(value) : null;
   }
 
   private <T> T read(String text, TypeReference<T> type) throws MillionSendException {
@@ -204,7 +211,7 @@ public final class HttpClient {
   }
 
   /** Coerce an error body into the canonical shape; fall back to a generic error. */
-  private MillionSendException toException(String text, int status) {
+  private MillionSendException toException(String text, int status, Integer retryAfter) {
     if (text != null && !text.isEmpty()) {
       try {
         JsonNode n = mapper.readTree(text);
@@ -218,14 +225,14 @@ public final class HttpClient {
               n.hasNonNull("statusCode") && n.get("statusCode").isNumber()
                   ? n.get("statusCode").asInt()
                   : status;
-          return new MillionSendException(name, message, code);
+          return new MillionSendException(name, message, code, retryAfter);
         }
       } catch (IOException ignored) {
         // Not JSON — fall through to the generic error.
       }
     }
     return new MillionSendException(
-        "application_error", "Request failed with status " + status, status);
+        "application_error", "Request failed with status " + status, status, retryAfter);
   }
 
   private static String queryString(Map<String, String> query) {

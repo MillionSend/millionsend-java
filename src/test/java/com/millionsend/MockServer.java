@@ -7,6 +7,8 @@ import java.io.OutputStream;
 import java.net.InetSocketAddress;
 import java.net.URI;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.Map;
 
 /**
  * A throwaway loopback HTTP server that records the last request it received and
@@ -20,6 +22,8 @@ final class MockServer implements AutoCloseable {
 
   int status = 200;
   String responseBody = "{\"id\":\"id_1\"}";
+  /** Extra response headers; a {@code Content-Type} here replaces the JSON one. */
+  final Map<String, String> responseHeaders = new HashMap<>();
 
   volatile String method;
   volatile String path;
@@ -43,6 +47,7 @@ final class MockServer implements AutoCloseable {
           body = new String(exchange.getRequestBody().readAllBytes(), StandardCharsets.UTF_8);
           byte[] out = responseBody.getBytes(StandardCharsets.UTF_8);
           exchange.getResponseHeaders().set("Content-Type", "application/json");
+          responseHeaders.forEach(exchange.getResponseHeaders()::set);
           exchange.sendResponseHeaders(status, out.length);
           try (OutputStream os = exchange.getResponseBody()) {
             os.write(out);
