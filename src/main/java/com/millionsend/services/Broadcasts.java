@@ -14,7 +14,11 @@ import com.millionsend.model.ListResponse;
 import com.millionsend.model.SendBroadcastOptions;
 import com.millionsend.model.UpdateBroadcastOptions;
 
-/** The {@code broadcasts} resource: create, get, list, update, remove, send, cancel. */
+/**
+ * The {@code broadcasts} resource: create, get, list, update, remove, send, cancel. A broadcast
+ * never sends from the shared domain: {@code create} with {@code send(true)} and {@code send}
+ * answer 403 {@code inbox_send_policy}.
+ */
 public final class Broadcasts {
 
   private final HttpClient http;

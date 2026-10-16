@@ -21,7 +21,10 @@ public final class ApiKeys {
     this.http = http;
   }
 
-  /** POST /api-keys — the returned {@code token} is shown only once. */
+  /**
+   * POST /api-keys — the returned {@code token} is shown only once. A {@code domainId} must be
+   * one of your own domains: the shared row answers 422.
+   */
   public CreateApiKeyResponse create(CreateApiKeyOptions options) throws MillionSendException {
     return http.request(
         "POST", "/api-keys", options, null, null, new TypeReference<CreateApiKeyResponse>() {});

@@ -9,6 +9,8 @@ import com.millionsend.services.Contacts;
 import com.millionsend.services.Deliverability;
 import com.millionsend.services.Domains;
 import com.millionsend.services.Emails;
+import com.millionsend.services.Inboxes;
+import com.millionsend.services.Receiving;
 import com.millionsend.services.Segments;
 import com.millionsend.services.Suppressions;
 import com.millionsend.services.Templates;
@@ -55,6 +57,8 @@ public final class MillionSend {
   private final Templates templates;
   private final ContactProperties contactProperties;
   private final Usage usage;
+  private final Receiving receiving;
+  private final Inboxes inboxes;
 
   /** Reads the API key from {@code MILLIONSEND_API_KEY} and the base URL from the environment. */
   public MillionSend() {
@@ -101,6 +105,8 @@ public final class MillionSend {
     this.templates = new Templates(http);
     this.contactProperties = new ContactProperties(http);
     this.usage = new Usage(http);
+    this.receiving = new Receiving(http);
+    this.inboxes = new Inboxes(http);
   }
 
   /** Explicit option, then the environment, then MillionSend Cloud. */
@@ -169,5 +175,15 @@ public final class MillionSend {
   /** MillionSend extension: plan, limits and today's send count. */
   public Usage usage() {
     return usage;
+  }
+
+  /** Received mail ({@code receiving().list()}, {@code get(id)}, {@code reply(...)}, …). */
+  public Receiving receiving() {
+    return receiving;
+  }
+
+  /** Inboxes for agents and people, with threads, labels, drafts and safety rules. */
+  public Inboxes inboxes() {
+    return inboxes;
   }
 }

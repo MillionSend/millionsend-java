@@ -6,6 +6,9 @@ import java.util.Map;
 /**
  * Keyset pagination for list endpoints. {@code after} and {@code before} are
  * mutually exclusive UUID cursors; {@code limit} is 1–100 (server default 20).
+ * Lists run newest first (MillionSend v0.13.0 and later), so {@code after} pages
+ * toward older items and {@code before} toward newer ones; a thread's emails run
+ * oldest first, so there {@code after} pages toward newer ones.
  */
 public final class ListOptions {
 
@@ -40,11 +43,13 @@ public final class ListOptions {
       return this;
     }
 
+    /** The last id of a page: the page after it. */
     public Builder after(String after) {
       o.after = after;
       return this;
     }
 
+    /** The first id of a page: the page before it, still in list order. */
     public Builder before(String before) {
       o.before = before;
       return this;

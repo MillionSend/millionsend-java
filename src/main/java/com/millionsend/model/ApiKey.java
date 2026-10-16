@@ -7,6 +7,7 @@ public final class ApiKey {
   private String name;
   private String createdAt;
   private String lastUsedAt;
+  private String inboxId;
 
   public String getId() {
     return id;
@@ -23,5 +24,10 @@ public final class ApiKey {
   /** {@code null} until the key is first used. */
   public String getLastUsedAt() {
     return lastUsedAt;
+  }
+
+  /** Set for a key restricted to one inbox. */
+  public String getInboxId() {
+    return inboxId;
   }
 }

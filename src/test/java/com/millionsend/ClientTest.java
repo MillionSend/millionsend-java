@@ -10,6 +10,7 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.millionsend.model.CreateEmailOptions;
 import com.millionsend.model.CreateEmailResponse;
+import com.millionsend.model.CreateInboxOptions;
 import org.junit.jupiter.api.Test;
 
 /** Transport-level wiring: headers, casing, idempotency, error parsing. */
@@ -155,6 +156,53 @@ class ClientTest {
   }
 
   @Test
+  void readsRetryAfterInWholeSecondsElseNull() throws Exception {
+    try (MockServer server = new MockServer()) {
+      CreateInboxOptions options = CreateInboxOptions.builder().build();
+      server.status = 503;
+      server.responseBody =
+          "{\"statusCode\":503,\"name\":\"name_review_unavailable\","
+              + "\"message\":\"try again shortly\"}";
+      server.responseHeaders.put("Retry-After", "300");
+      MillionSendException e =
+          assertThrows(MillionSendException.class, () -> server.client().inboxes().create(options));
+      assertEquals("name_review_unavailable", e.getName());
+      assertEquals(503, e.getStatusCode());
+      assertEquals(300, e.getRetryAfter());
+
+      server.responseHeaders.put("Retry-After", "Fri, 16 Oct 2026 12:00:00 GMT");
+      e = assertThrows(MillionSendException.class, () -> server.client().inboxes().create(options));
+      assertNull(e.getRetryAfter());
+
+      server.responseHeaders.clear();
+      e = assertThrows(MillionSendException.class, () -> server.client().inboxes().create(options));
+      assertNull(e.getRetryAfter());
+    }
+  }
+
+  @Test
+  void unknownRouteIsNotFoundAsJsonAndApplicationErrorAsPlainText() throws Exception {
+    try (MockServer server = new MockServer()) {
+      server.status = 404;
+      server.responseHeaders.put("Content-Type", "text/plain");
+      server.responseBody = "404 Not Found";
+      MillionSendException e =
+          assertThrows(MillionSendException.class, () -> server.client().inboxes().list());
+      assertEquals(404, e.getStatusCode());
+      assertEquals("application_error", e.getName());
+      assertEquals("Request failed with status 404", e.getMessage());
+
+      server.responseHeaders.clear();
+      server.responseBody =
+          "{\"statusCode\":404,\"name\":\"not_found\","
+              + "\"message\":\"The requested endpoint does not exist.\"}";
+      e = assertThrows(MillionSendException.class, () -> server.client().inboxes().list());
+      assertEquals(404, e.getStatusCode());
+      assertEquals("not_found", e.getName());
+    }
+  }
+
+  @Test
   void transportFailureHasNullStatusCode() throws Exception {
     String closedBaseUrl;
     try (MockServer server = new MockServer()) {
@@ -164,7 +212,22 @@ class ClientTest {
     MillionSendException e =
         assertThrows(MillionSendException.class, () -> ms.emails().send(email()));
     assertNull(e.getStatusCode());
+    assertNull(e.getRetryAfter());
     assertEquals("application_error", e.getName());
+  }
+
+  @Test
+  void neverSendsAPathAnEmptyOrDotIdWouldRedirect() throws Exception {
+    try (MockServer server = new MockServer()) {
+      MillionSend ms = server.client();
+      assertThrows(IllegalArgumentException.class, () -> ms.inboxes().labels().remove("i1", ".."));
+      assertThrows(IllegalArgumentException.class, () -> ms.inboxes().threads().remove("i1", "."));
+      assertThrows(IllegalArgumentException.class, () -> ms.emails().get(""));
+      assertNull(server.method);
+      server.responseBody = "{\"object\":\"inbox_label\",\"id\":\"...\",\"deleted\":true}";
+      ms.inboxes().labels().remove("i1", "...");
+      assertEquals("/inboxes/i1/labels/...", server.rawPath);
+    }
   }
 
   @Test

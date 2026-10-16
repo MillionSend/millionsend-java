@@ -8,7 +8,11 @@ import com.millionsend.model.CreateBatchEmailsResponse;
 import com.millionsend.model.CreateEmailOptions;
 import java.util.List;
 
-/** The {@code batch} resource: send up to 100 emails in one call. */
+/**
+ * The {@code batch} resource: send up to 100 emails in one call. Items never send from the
+ * shared domain: such an item gets 403 {@code inbox_send_policy}, which fails the whole batch
+ * in strict mode and lands in {@code errors} in permissive mode.
+ */
 public final class Batch {
 
   private final HttpClient http;

@@ -9,6 +9,8 @@ import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.databind.PropertyNamingStrategies;
 import com.millionsend.MillionSendException;
+import com.millionsend.model.InboxDraft;
+import com.millionsend.model.SendResult;
 import java.io.IOException;
 import java.net.URI;
 import java.net.URLEncoder;
@@ -28,7 +30,7 @@ import java.util.Map;
 public final class HttpClient {
 
   /** Kept in sync with the Maven {@code version}; surfaced in the User-Agent. */
-  public static final String VERSION = "0.8.0";
+  public static final String VERSION = "0.9.0";
   private static final Duration CONNECT_TIMEOUT = Duration.ofSeconds(10);
   private static final Duration REQUEST_TIMEOUT = Duration.ofSeconds(30);
 
@@ -93,10 +95,57 @@ public final class HttpClient {
       RequestOptions options,
       TypeReference<T> returnType)
       throws MillionSendException {
+    return read(execute(method, path, body, query, options, REQUEST_TIMEOUT).body(), returnType);
+  }
+
+  /**
+   * A GET the API may hold open for up to {@code waitSeconds} (a long-poll), so the
+   * request timeout stretches by that long.
+   */
+  public <T> T longPoll(
+      String path, Map<String, String> query, Integer waitSeconds, TypeReference<T> returnType)
+      throws MillionSendException {
+    Duration timeout =
+        waitSeconds == null ? REQUEST_TIMEOUT : REQUEST_TIMEOUT.plusSeconds(Math.max(0, waitSeconds));
+    return read(execute("GET", path, null, query, null, timeout).body(), returnType);
+  }
+
+  /**
+   * A POST to an inbox send endpoint (reply, forward, draft send). A 202 means the
+   * inbox's send rules held the message, so its body is the held {@link InboxDraft};
+   * any other 2xx body reads as {@code sentType}.
+   */
+  public <T> SendResult<T> sendOrHold(
+      String path, Object body, RequestOptions options, TypeReference<T> sentType)
+      throws MillionSendException {
+    HttpResponse<String> response = execute("POST", path, body, null, options, REQUEST_TIMEOUT);
+    if (response.statusCode() == 202) {
+      return SendResult.held(read(response.body(), new TypeReference<InboxDraft>() {}));
+    }
+    return SendResult.sent(read(response.body(), sentType));
+  }
+
+  /** Sends the request and returns the 2xx response; any other status throws. */
+  private HttpResponse<String> execute(
+      String method,
+      String path,
+      Object body,
+      Map<String, String> query,
+      RequestOptions options,
+      Duration timeout)
+      throws MillionSendException {
+    // URL normalization resolves an empty, "." or ".." segment away, so an id such as
+    // ".." would send the request to another resource (DELETE /inboxes/{id}/labels/..
+    // deletes the inbox).
+    for (String segment : path.substring(1).split("/", -1)) {
+      if (segment.isEmpty() || segment.equals(".") || segment.equals("..")) {
+        throw new IllegalArgumentException("An id in the request path is empty, \".\" or \"..\".");
+      }
+    }
 
     HttpRequest.Builder rb =
         HttpRequest.newBuilder(URI.create(baseUrl + path + queryString(query)))
-            .timeout(REQUEST_TIMEOUT)
+            .timeout(timeout)
             .header("Authorization", "Bearer " + apiKey)
             .header("Accept", "application/json")
             .header("User-Agent", userAgent);
@@ -132,12 +181,22 @@ public final class HttpClient {
     }
 
     int status = response.statusCode();
-    String text = response.body();
     if (status < 200 || status >= 300) {
-      throw toException(text, status);
+      throw toException(response.body(), status, retryAfterSeconds(response));
     }
+    return response;
+  }
+
+  /** {@code retry-after} in whole seconds, the only form the API sends; {@code null} otherwise. */
+  private static Integer retryAfterSeconds(HttpResponse<String> response) {
+    String value = response.headers().firstValue("retry-after").orElse("").trim();
+    // At most nine digits, so the value always fits an int.
+    return value.matches("\\d{1,9}") ? Integer.valueOf(value) : null;
+  }
+
+  private <T> T read(String text, TypeReference<T> type) throws MillionSendException {
     try {
-      return mapper.readValue(text, returnType);
+      return mapper.readValue(text, type);
     } catch (IOException e) {
       throw new MillionSendException("application_error", e.getMessage(), null);
     }
@@ -152,7 +211,7 @@ public final class HttpClient {
   }
 
   /** Coerce an error body into the canonical shape; fall back to a generic error. */
-  private MillionSendException toException(String text, int status) {
+  private MillionSendException toException(String text, int status, Integer retryAfter) {
     if (text != null && !text.isEmpty()) {
       try {
         JsonNode n = mapper.readTree(text);
@@ -166,14 +225,14 @@ public final class HttpClient {
               n.hasNonNull("statusCode") && n.get("statusCode").isNumber()
                   ? n.get("statusCode").asInt()
                   : status;
-          return new MillionSendException(name, message, code);
+          return new MillionSendException(name, message, code, retryAfter);
         }
       } catch (IOException ignored) {
         // Not JSON — fall through to the generic error.
       }
     }
     return new MillionSendException(
-        "application_error", "Request failed with status " + status, status);
+        "application_error", "Request failed with status " + status, status, retryAfter);
   }
 
   private static String queryString(Map<String, String> query) {

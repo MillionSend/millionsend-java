@@ -27,7 +27,8 @@ class E2ETest {
 
   @Test
   void contactLifecycle() throws Exception {
-    String email = "sdk-e2e-" + System.currentTimeMillis() + "@example.com";
+    // The API refuses contacts at domains that can never receive mail, example.com included.
+    String email = "success+sdk-e2e-" + System.currentTimeMillis() + "@simulator.amazonses.com";
 
     Id created =
         ms.contacts().create(CreateContactOptions.builder().email(email).firstName("Ada").build());

@@ -24,7 +24,17 @@ public final class Emails {
     this.http = http;
   }
 
-  /** POST /emails */
+  /**
+   * POST /emails. {@code subject} takes up to 998 characters, and a {@code to}, {@code cc} or
+   * {@code bcc} address on a domain that can never receive mail ({@code example.com},
+   * {@code .test}, a TLD that doesn't exist, …) answers 422 {@code validation_error}.
+   *
+   * <p>{@code from} may be an inbox's address on the shared domain while the shared row's
+   * {@code sendingMode} is {@code open}: the inbox's exact address (no +tag), a display name
+   * left out or equal to its {@code fromName}, no {@code replyTo}, {@code attachments},
+   * {@code headers} or {@code scheduledAt}, and at most 10 distinct recipients. A key
+   * restricted to a domain gets 403 {@code restricted_api_key} for such a send.
+   */
   public CreateEmailResponse send(CreateEmailOptions options) throws MillionSendException {
     return send(options, (RequestOptions) null);
   }

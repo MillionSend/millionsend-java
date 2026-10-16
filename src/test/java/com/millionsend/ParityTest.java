@@ -34,6 +34,34 @@ import com.millionsend.model.CreateTopicOptions;
 import com.millionsend.model.CreateWebhookOptions;
 import com.millionsend.model.CreateWebhookResponse;
 import com.millionsend.model.Domain;
+import com.millionsend.model.CreateDraftOptions;
+import com.millionsend.model.CreateInboxOptions;
+import com.millionsend.model.DeletedResponse;
+import com.millionsend.model.ForwardOptions;
+import com.millionsend.model.Inbox;
+import com.millionsend.model.InboxDraft;
+import com.millionsend.model.InboxLabel;
+import com.millionsend.model.InboxLabelOptions;
+import com.millionsend.model.InboxSafety;
+import com.millionsend.model.InboxSafetyOptions;
+import com.millionsend.model.InboxThread;
+import com.millionsend.model.LatestCodeOptions;
+import com.millionsend.model.ListInboxesOptions;
+import com.millionsend.model.ListReceivedEmailsOptions;
+import com.millionsend.model.ListThreadsOptions;
+import com.millionsend.model.QuarantineRelease;
+import com.millionsend.model.QuarantinedEmail;
+import com.millionsend.model.ReceivedAttachment;
+import com.millionsend.model.ReceivedEmail;
+import com.millionsend.model.ReceivedEmailListResponse;
+import com.millionsend.model.ReplyOptions;
+import com.millionsend.model.SearchThreadsOptions;
+import com.millionsend.model.SendResult;
+import com.millionsend.model.ThreadEmail;
+import com.millionsend.model.UpdateDraftOptions;
+import com.millionsend.model.UpdateInboxOptions;
+import com.millionsend.model.UpdateThreadOptions;
+import com.millionsend.model.VerificationCode;
 import com.millionsend.model.ListContactsOptions;
 import com.millionsend.model.ListOptions;
 import com.millionsend.model.ListResponse;
@@ -181,6 +209,8 @@ class ParityTest {
     assertEquals("e1", res.getData().get(0).getId());
     assertEquals(1, res.getErrors().get(0).getIndex());
     assertEquals("emails.1: bad", res.getErrors().get(0).getMessage());
+    assertNull(res.getErrors().get(0).getStatusCode());
+    assertNull(res.getErrors().get(0).getName());
 
     server.responseBody = "{\"data\":[{\"id\":\"e1\"}]}";
     res = ms.batch().send(Collections.singletonList(
@@ -248,7 +278,8 @@ class ParityTest {
     server.responseBody =
         "{\"data\":[{\"object\":\"contact\",\"index\":0,\"id\":\"c1\",\"status\":\"created\"}],"
             + "\"counts\":{\"created\":1,\"updated\":0,\"skipped\":0,\"failed\":1},"
-            + "\"errors\":[{\"index\":1,\"message\":\"invalid email\"}]}";
+            + "\"errors\":[{\"index\":1,\"statusCode\":422,\"name\":\"validation_error\","
+            + "\"message\":\"invalid email\"}]}";
     CreateBatchContactsResponse res =
         ms.contacts()
             .batch()
@@ -268,6 +299,8 @@ class ParityTest {
     assertEquals(1, res.getCounts().getCreated());
     assertEquals(1, res.getCounts().getFailed());
     assertEquals("invalid email", res.getErrors().get(0).getMessage());
+    assertEquals(422, res.getErrors().get(0).getStatusCode());
+    assertEquals("validation_error", res.getErrors().get(0).getName());
 
     ms.contacts().batch().create(Collections.singletonList(CreateContactOptions.builder().email("a@x.dev").build()));
     assertNull(server.query);
@@ -595,6 +628,61 @@ class ParityTest {
     assertEquals("/domains/d1", server.path);
   }
 
+  static final String SHARED_DOMAIN_JSON =
+      "{\"object\":\"domain\",\"id\":\"sd1\",\"name\":\"acme.agents.dev\",\"status\":\"verified\","
+          + "\"created_at\":\"2026-10-01T00:00:00.000Z\",\"region\":\"us-east-1\","
+          + "\"open_tracking\":false,\"click_tracking\":false,\"tracking_subdomain\":null,"
+          + "\"capabilities\":{\"sending\":\"enabled\",\"receiving\":\"enabled\"},"
+          + "\"receiving_catch_all\":false,\"shared\":true,\"sending_mode\":\"reply_only\","
+          + "\"sending_mode_reason\":\"plan\",\"records\":[]}";
+
+  @Test
+  void sharedDomainRow() throws Exception {
+    server.responseBody = SHARED_DOMAIN_JSON;
+    Domain shared = ms.domains().get("sd1");
+    assertEquals("domain", shared.getObject());
+    assertTrue(shared.isShared());
+    assertEquals("verified", shared.getStatus());
+    assertEquals("reply_only", shared.getSendingMode());
+    assertEquals("plan", shared.getSendingModeReason());
+    assertEquals("enabled", shared.getCapabilities().get("receiving"));
+    assertFalse(shared.getReceivingCatchAll());
+    assertNull(shared.getTrackingSubdomain());
+    assertTrue(shared.getRecords().isEmpty());
+
+    // A server before v0.14.0 sends no shared key; own domains never carry a sending mode.
+    server.responseBody = DOMAIN_JSON;
+    Domain own = ms.domains().get("d1");
+    assertFalse(own.isShared());
+    assertNull(own.getSendingMode());
+    assertNull(own.getSendingModeReason());
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":["
+            + DOMAIN_JSON.replace("\"records\"", "\"shared\":false,\"records\"") + ","
+            + SHARED_DOMAIN_JSON
+                .replace("reply_only", "a_mode_from_a_newer_server")
+                .replace("\"plan\"", "null")
+            + "]}";
+    ListResponse<Domain> list = ms.domains().list();
+    assertFalse(list.getData().get(0).isShared());
+    Domain last = list.getData().get(1);
+    assertTrue(last.isShared());
+    assertEquals("a_mode_from_a_newer_server", last.getSendingMode());
+    assertNull(last.getSendingModeReason());
+
+    server.status = 403;
+    server.responseBody =
+        "{\"statusCode\":403,\"name\":\"forbidden\",\"message\":\"acme.agents.dev is your team's "
+            + "subdomain of the shared domain: it can't be changed or deleted\"}";
+    MillionSendException e =
+        assertThrows(
+            MillionSendException.class,
+            () -> ms.domains().update(UpdateDomainOptions.builder().id("sd1").openTracking(true).build()));
+    assertEquals("forbidden", e.getName());
+    assertEquals(403, e.getStatusCode());
+  }
+
   @Test
   void webhooks() throws Exception {
     server.responseBody = "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_abc\"}";
@@ -831,5 +919,770 @@ class ParityTest {
     u = ms.usage().get();
     assertNull(u.getPlan());
     assertNull(u.getLimits().getEmailsPerDay());
+  }
+  // ---- receiving --------------------------------------------------------
+
+  static final String RECEIVED_JSON =
+      "{\"object\":\"email\",\"id\":\"r1\",\"to\":[\"bot@x.dev\"],\"from\":\"ada@y.dev\","
+          + "\"created_at\":\"2026-10-12T10:00:00.000Z\",\"subject\":\"Your code\",\"bcc\":[],\"cc\":[],"
+          + "\"reply_to\":[],\"received_for\":[\"bot@x.dev\"],\"message_id\":\"<m1@y.dev>\","
+          + "\"attachments\":[{\"id\":\"a1\",\"filename\":\"a.pdf\",\"content_type\":\"application/pdf\","
+          + "\"content_id\":null,\"content_disposition\":\"attachment\",\"size\":42}],"
+          + "\"html\":\"<p>482913</p>\",\"html_format\":\"cid\",\"text\":\"482913\","
+          + "\"headers\":{\"from\":\"Ada <ada@y.dev>\"},"
+          + "\"authentication\":{\"spf\":\"pass\",\"dkim\":\"gray\",\"dmarc\":\"pass\"},"
+          + "\"raw\":{\"download_url\":\"https://api.x.dev/raw/r1\",\"expires_at\":\"2026-10-12T11:00:00.000Z\"},"
+          + "\"inbox_id\":\"i1\",\"thread_id\":\"t1\","
+          + "\"inboxes\":[{\"inbox_id\":\"i1\",\"thread_id\":\"t1\",\"verdict\":\"clean\"}],"
+          + "\"screening\":{\"verdict\":\"clean\",\"sender_trust\":\"external\",\"quarantine_reason\":null,"
+          + "\"reasons\":[\"targets_agent\"],\"injection_score\":3,\"phishing_score\":null,"
+          + "\"hidden_text_removed\":true},"
+          + "\"spam_verdict\":\"pass\",\"spam_score\":4,\"virus_verdict\":\"pass\",\"virus_signature\":null,"
+          + "\"extracted_text\":\"Your code is 482913\","
+          + "\"extracted\":{\"kinds\":[\"code\"],\"code\":\"482913\",\"link\":null,"
+          + "\"link_domain_matches_sender\":null,\"ambiguous\":false},\"read\":false,"
+          + "\"a_field_from_a_newer_server\":{\"x\":1}}";
+
+  static final String DRAFT_JSON =
+      "{\"object\":\"inbox_draft\",\"id\":\"d1\",\"type\":\"reply\",\"to\":[\"ada@y.dev\"],\"cc\":[],"
+          + "\"bcc\":[],\"subject\":\"Re: Hi\",\"html\":null,\"text\":\"Thanks\",\"thread_id\":\"t1\","
+          + "\"reply_to_email_id\":\"r1\",\"email_id\":null,\"created_at\":\"2026-10-12T10:00:00.000Z\","
+          + "\"updated_at\":\"2026-10-12T10:00:00.000Z\",\"status\":\"pending_approval\","
+          + "\"approval_reasons\":[\"send_policy\",\"ramp\"],\"forward\":false,\"decided_by\":null,"
+          + "\"decided_at\":null,\"expires_at\":\"2026-10-19T10:00:00.000Z\"}";
+
+  @Test
+  void receivingListCarriesEveryFilterAndHeldIds() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[" + RECEIVED_JSON + "],"
+            + "\"held\":[{\"id\":\"r2\",\"inbox_id\":\"i1\",\"reason\":\"quarantined\","
+            + "\"quarantine_reason\":\"not_allowlisted\",\"created_at\":\"2026-10-12T10:00:01.000Z\"}]}";
+    ReceivedEmailListResponse res =
+        ms.receiving()
+            .list(
+                ListReceivedEmailsOptions.builder()
+                    .limit(5)
+                    .after("r0")
+                    .waitSeconds(20)
+                    .since("2026-10-12T10:00:00Z")
+                    .inboxId("i1")
+                    .to("bot@x.dev")
+                    .from("y.dev")
+                    .subjectContains("code")
+                    .unread(true)
+                    .includeQuarantined(true)
+                    .quarantined(true)
+                    .build());
+    assertEquals("GET", server.method);
+    assertEquals("/emails/receiving", server.path);
+    assertEquals(
+        "limit=5&after=r0&wait=20&since=2026-10-12T10%3A00%3A00Z&inbox_id=i1&to=bot%40x.dev"
+            + "&from=y.dev&subject_contains=code&unread=true&include_quarantined=true&quarantined=true",
+        server.query);
+    assertEquals("r2", res.getHeld().get(0).getId());
+    assertEquals("quarantined", res.getHeld().get(0).getReason());
+    assertEquals("not_allowlisted", res.getHeld().get(0).getQuarantineReason());
+    ReceivedEmail e = res.getData().get(0);
+    assertEquals("clean", e.getScreening().getVerdict());
+    assertEquals("external", e.getScreening().getSenderTrust());
+
+    server.responseBody = "{\"object\":\"list\",\"has_more\":false,\"data\":[]}";
+    res = ms.receiving().list();
+    assertNull(server.query);
+    assertNull(res.getHeld());
+    ms.receiving()
+        .list(ListReceivedEmailsOptions.builder().includeQuarantined(false).quarantined(false).build());
+    assertNull(server.query);
+
+    // An inbox-scoped key reads its own inbox's unread mail without naming it.
+    ms.receiving().list(ListReceivedEmailsOptions.builder().unread(false).build());
+    assertEquals("unread=false", server.query);
+
+    server.status = 404;
+    server.responseBody = "{\"statusCode\":404,\"name\":\"not_found\",\"message\":\"Inbox not found.\"}";
+    MillionSendException missing =
+        assertThrows(
+            MillionSendException.class,
+            () -> ms.receiving().list(ListReceivedEmailsOptions.builder().inboxId("i9").waitSeconds(30).build()));
+    assertEquals("not_found", missing.getName());
+    assertEquals(404, missing.getStatusCode());
+  }
+
+  @Test
+  void receivingGetDecodesTheExtensionFields() throws Exception {
+    server.responseBody = RECEIVED_JSON;
+    ReceivedEmail e = ms.receiving().get("r1", "cid");
+    assertEquals("GET", server.method);
+    assertEquals("/emails/receiving/r1", server.path);
+    assertEquals("html_format=cid", server.query);
+    assertEquals("cid", e.getHtmlFormat());
+    assertEquals("pass", e.getAuthentication().get("spf"));
+    assertEquals("https://api.x.dev/raw/r1", e.getRaw().getDownloadUrl());
+    assertEquals("Ada <ada@y.dev>", e.getHeaders().get("from"));
+    assertEquals("attachment", e.getAttachments().get(0).getContentDisposition());
+    assertEquals(42L, e.getAttachments().get(0).getSize());
+    assertEquals("i1", e.getInboxId());
+    assertEquals("clean", e.getInboxes().get(0).getVerdict());
+    assertEquals(3, e.getScreening().getInjectionScore());
+    assertNull(e.getScreening().getPhishingScore());
+    assertTrue(e.getScreening().getHiddenTextRemoved());
+    assertEquals("targets_agent", e.getScreening().getReasons().get(0));
+    assertEquals(4, e.getSpamScore());
+    assertEquals("482913", e.getExtracted().getCode());
+    assertEquals("code", e.getExtracted().getKinds().get(0));
+    assertFalse(e.getExtracted().getAmbiguous());
+    assertEquals("Your code is 482913", e.getExtractedText());
+    assertFalse(e.getRead());
+
+    ms.receiving().get("r1");
+    assertNull(server.query);
+  }
+
+  @Test
+  void receivingReplySentOrHeld() throws Exception {
+    server.responseBody = "{\"object\":\"email\",\"id\":\"e9\",\"thread_id\":\"t1\",\"inbox_id\":\"i1\"}";
+    SendResult<ThreadEmail> sent =
+        ms.receiving()
+            .reply(
+                "r1",
+                ReplyOptions.builder()
+                    .text("Thanks")
+                    .html("<p>Thanks</p>")
+                    .subject("Re: Hi")
+                    .cc("cc@x.dev")
+                    .bcc("bcc@x.dev")
+                    .replyAll(true)
+                    .requiresApproval(false)
+                    .from("bot@x.dev")
+                    .inboxId("i1")
+                    .build(),
+                RequestOptions.idempotencyKey("reply-1"));
+    assertEquals("POST", server.method);
+    assertEquals("/emails/receiving/r1/reply", server.path);
+    assertEquals("reply-1", server.header("Idempotency-Key"));
+    assertEquals(
+        json(
+            "{\"text\":\"Thanks\",\"html\":\"<p>Thanks</p>\",\"subject\":\"Re: Hi\",\"cc\":[\"cc@x.dev\"],"
+                + "\"bcc\":[\"bcc@x.dev\"],\"reply_all\":true,\"requires_approval\":false,"
+                + "\"from\":\"bot@x.dev\",\"inbox_id\":\"i1\"}"),
+        body());
+    assertFalse(sent.isDraft());
+    assertEquals("sent", sent.getKind());
+    assertEquals("e9", sent.getSent().getId());
+    assertEquals("t1", sent.getSent().getThreadId());
+    assertNull(sent.getDraft());
+
+    server.status = 202;
+    server.responseBody = DRAFT_JSON;
+    SendResult<ThreadEmail> held = ms.receiving().reply("r1", ReplyOptions.builder().text("Thanks").build());
+    assertNull(server.header("Idempotency-Key"));
+    assertEquals(json("{\"text\":\"Thanks\"}"), body());
+    assertTrue(held.isDraft());
+    assertEquals("draft", held.getKind());
+    assertNull(held.getSent());
+    assertEquals("pending_approval", held.getDraft().getStatus());
+    assertEquals(Arrays.asList("send_policy", "ramp"), held.getDraft().getApprovalReasons());
+  }
+
+  @Test
+  void receivingForwardAndRemove() throws Exception {
+    server.responseBody = "{\"object\":\"email\",\"id\":\"e9\",\"thread_id\":null,\"inbox_id\":null}";
+    SendResult<ThreadEmail> res =
+        ms.receiving()
+            .forward(
+                "r1",
+                ForwardOptions.builder()
+                    .to("ops@x.dev")
+                    .cc("cc@x.dev")
+                    .bcc("bcc@x.dev")
+                    .text("FYI")
+                    .html("<p>FYI</p>")
+                    .subject("Fwd: Hi")
+                    .requiresApproval(true)
+                    .from("bot@x.dev")
+                    .inboxId("i1")
+                    .mode("attachment")
+                    .build(),
+                RequestOptions.idempotencyKey("fwd-1"));
+    assertEquals("POST", server.method);
+    assertEquals("/emails/receiving/r1/forward", server.path);
+    assertEquals("fwd-1", server.header("Idempotency-Key"));
+    assertEquals(
+        json(
+            "{\"to\":[\"ops@x.dev\"],\"cc\":[\"cc@x.dev\"],\"bcc\":[\"bcc@x.dev\"],\"text\":\"FYI\","
+                + "\"html\":\"<p>FYI</p>\",\"subject\":\"Fwd: Hi\",\"requires_approval\":true,"
+                + "\"from\":\"bot@x.dev\",\"inbox_id\":\"i1\",\"mode\":\"attachment\"}"),
+        body());
+    assertFalse(res.isDraft());
+    assertNull(res.getSent().getThreadId());
+
+    server.responseBody = "{\"object\":\"email\",\"id\":\"r1\",\"deleted\":true}";
+    DeletedResponse removed = ms.receiving().remove("r1");
+    assertEquals("DELETE", server.method);
+    assertEquals("/emails/receiving/r1", server.path);
+    assertTrue(removed.getDeleted());
+  }
+
+  @Test
+  void receivingAttachments() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"a1\",\"filename\":\"a.pdf\","
+            + "\"size\":42,\"content_type\":\"application/pdf\",\"content_disposition\":\"attachment\","
+            + "\"download_url\":\"https://api.x.dev/dl/a1\",\"expires_at\":\"2026-10-12T11:00:00.000Z\"}]}";
+    ListResponse<ReceivedAttachment> list = ms.receiving().attachments().list("r1");
+    assertEquals("GET", server.method);
+    assertEquals("/emails/receiving/r1/attachments", server.path);
+    assertNull(server.query);
+    assertEquals("https://api.x.dev/dl/a1", list.getData().get(0).getDownloadUrl());
+
+    ms.receiving().attachments().list("r1", ListOptions.builder().limit(2).build());
+    assertEquals("limit=2", server.query);
+
+    server.responseBody =
+        "{\"object\":\"attachment\",\"id\":\"a1\",\"size\":42,\"content_type\":\"application/pdf\","
+            + "\"content_disposition\":\"inline\",\"content_id\":\"cid-1\","
+            + "\"download_url\":\"https://api.x.dev/dl/a1\",\"expires_at\":\"2026-10-12T11:00:00.000Z\"}";
+    ReceivedAttachment a = ms.receiving().attachments().get("r1", "a1");
+    assertEquals("/emails/receiving/r1/attachments/a1", server.path);
+    assertEquals("attachment", a.getObject());
+    assertEquals("cid-1", a.getContentId());
+    assertNull(a.getFilename());
+  }
+
+  // ---- inboxes ----------------------------------------------------------
+
+  static final String INBOX_JSON =
+      "{\"object\":\"inbox\",\"id\":\"i1\",\"name\":\"Signup bot\",\"email_address\":\"bot-7f3k@acme.agents.dev\","
+          + "\"domain_id\":\"sd1\",\"receiving_address\":null,\"from_name\":null,\"unread\":2,\"drafts\":1,"
+          + "\"last_received\":null,\"created_at\":\"2026-10-12T10:00:00.000Z\",\"kind\":\"agent\","
+          + "\"shared\":true,\"expires_at\":null,\"quarantined\":3,"
+          + "\"pending_approval\":1}";
+
+  @Test
+  void inboxesCrud() throws Exception {
+    server.status = 201;
+    server.responseBody = INBOX_JSON;
+    Inbox created =
+        ms.inboxes()
+            .create(
+                CreateInboxOptions.builder()
+                    .emailAddress("bot@x.dev")
+                    .name("Signup bot")
+                    .fromName("Acme")
+                    .forwarding(false)
+                    .kind("agent")
+                    .expiresIn("24h")
+                    .safety(InboxSafetyOptions.builder().acceptFrom("anyone").sendCap(null).build())
+                    .build());
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes", server.path);
+    assertEquals(
+        json(
+            "{\"email_address\":\"bot@x.dev\",\"name\":\"Signup bot\",\"from_name\":\"Acme\","
+                + "\"forwarding\":false,\"kind\":\"agent\",\"expires_in\":\"24h\","
+                + "\"safety\":{\"accept_from\":\"anyone\",\"send_cap\":null}}"),
+        body());
+    assertEquals("i1", created.getId());
+    assertEquals("agent", created.getKind());
+    assertTrue(created.getShared());
+    assertEquals("sd1", created.getDomainId());
+    assertNull(created.getExpiresAt());
+    assertEquals(3, created.getQuarantined());
+    assertEquals(1, created.getPendingApproval());
+    assertEquals(2, created.getUnread());
+
+    server.status = 200;
+    ms.inboxes().create(CreateInboxOptions.builder().build());
+    assertEquals(json("{}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().username("signup-bot").build());
+    assertEquals(json("{\"username\":\"signup-bot\"}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().domainId("sd1").build());
+    assertEquals(json("{\"domain_id\":\"sd1\"}"), body());
+    ms.inboxes().create(CreateInboxOptions.builder().domainId("d1").username("support").build());
+    assertEquals(json("{\"domain_id\":\"d1\",\"username\":\"support\"}"), body());
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":true,\"data\":[{\"id\":\"i1\",\"name\":null,"
+            + "\"email_address\":\"bot@x.dev\",\"from_name\":null,\"unread\":0,\"last_received\":null,"
+            + "\"kind\":\"human\",\"shared\":false,\"expires_at\":null}]}";
+    ListResponse<Inbox> list =
+        ms.inboxes().list(ListInboxesOptions.builder().limit(10).before("i0").kind("human").build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes", server.path);
+    assertEquals("limit=10&before=i0&kind=human", server.query);
+    assertTrue(list.isHasMore());
+    assertEquals("human", list.getData().get(0).getKind());
+    assertNull(list.getData().get(0).getDrafts());
+
+    server.responseBody = INBOX_JSON;
+    ms.inboxes().get("Bot+1@x.dev");
+    assertEquals("/inboxes/Bot%2B1%40x.dev", server.rawPath);
+
+    ms.inboxes()
+        .update("i1", UpdateInboxOptions.builder().name("Bot").fromName("").expiresIn(null).build());
+    assertEquals("PATCH", server.method);
+    assertEquals("/inboxes/i1", server.path);
+    assertEquals(json("{\"name\":\"Bot\",\"from_name\":\"\",\"expires_in\":null}"), body());
+
+    server.responseBody = "{\"object\":\"inbox\",\"id\":\"i1\",\"deleted\":true}";
+    assertTrue(ms.inboxes().remove("i1").getDeleted());
+    assertEquals("DELETE", server.method);
+    assertEquals("/inboxes/i1", server.path);
+  }
+
+  @Test
+  void inboxSafety() throws Exception {
+    server.responseBody =
+        "{\"object\":\"inbox_safety\",\"inbox_id\":\"i1\",\"accept_from\":\"verified\",\"allowlist\":[\"*@y.dev\"],"
+            + "\"owner_addresses\":[],\"screening\":true,\"extract_codes\":true,\"send_policy\":\"reply_only\","
+            + "\"require_approval\":false,\"private_codes\":true,\"send_cap\":null,\"forward_to\":[]}";
+    InboxSafety safety = ms.inboxes().safety().get("i1");
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/safety", server.path);
+    assertEquals("verified", safety.getAcceptFrom());
+    assertEquals("*@y.dev", safety.getAllowlist().get(0));
+    assertNull(safety.getSendCap());
+    assertTrue(safety.getPrivateCodes());
+
+    ms.inboxes()
+        .safety()
+        .update(
+            "i1",
+            InboxSafetyOptions.builder()
+                .acceptFrom("allowlist")
+                .allowlist("ada@y.dev", "*@z.dev")
+                .ownerAddresses(Collections.singletonList("me@x.dev"))
+                .screening(true)
+                .extractCodes(false)
+                .sendPolicy("allowlist")
+                .requireApproval(true)
+                .privateCodes(true)
+                .sendCap(50)
+                .forwardTo(Collections.singletonList("me@x.dev"))
+                .build());
+    assertEquals("PATCH", server.method);
+    assertEquals("/inboxes/i1/safety", server.path);
+    assertEquals(
+        json(
+            "{\"accept_from\":\"allowlist\",\"allowlist\":[\"ada@y.dev\",\"*@z.dev\"],"
+                + "\"owner_addresses\":[\"me@x.dev\"],\"screening\":true,\"extract_codes\":false,"
+                + "\"send_policy\":\"allowlist\",\"require_approval\":true,\"private_codes\":true,"
+                + "\"send_cap\":50,\"forward_to\":[\"me@x.dev\"]}"),
+        body());
+
+    ms.inboxes().safety().update("i1", InboxSafetyOptions.builder().sendCap(null).build());
+    assertEquals(json("{\"send_cap\":null}"), body());
+  }
+
+  @Test
+  void inboxCodesAndQuarantine() throws Exception {
+    server.responseBody =
+        "{\"object\":\"verification_code\",\"status\":\"found\",\"kind\":\"otp\",\"code\":\"482913\","
+            + "\"url\":null,\"link_domain_matches_sender\":true,\"email_id\":\"r1\",\"from\":\"ada@y.dev\","
+            + "\"received_at\":\"2026-10-12T10:00:00.000Z\",\"sender_trust\":\"external\"}";
+    VerificationCode code =
+        ms.inboxes()
+            .codes()
+            .latest("i1", LatestCodeOptions.builder().from("y.dev").waitSeconds(10).maxAge(600).build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/codes/latest", server.path);
+    assertEquals("from=y.dev&wait=10&max_age=600", server.query);
+    ms.inboxes().codes().latest("i1", LatestCodeOptions.builder().since("2026-10-16T12:00:00.000Z").build());
+    assertEquals("since=2026-10-16T12%3A00%3A00.000Z", server.query);
+    assertEquals("found", code.getStatus());
+    assertEquals("482913", code.getCode());
+    assertTrue(code.getLinkDomainMatchesSender());
+
+    server.responseBody =
+        "{\"object\":\"verification_code\",\"status\":\"timeout\",\"kind\":null,\"code\":null,\"url\":null,"
+            + "\"link_domain_matches_sender\":null,\"email_id\":null,\"from\":null,\"received_at\":null,"
+            + "\"sender_trust\":null}";
+    assertEquals("timeout", ms.inboxes().codes().latest("i1").getStatus());
+    assertNull(server.query);
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"r2\",\"thread_id\":\"t2\","
+            + "\"from\":\"eve@z.dev\",\"subject\":\"Hi\",\"received_at\":\"2026-10-12T10:00:00.000Z\","
+            + "\"quarantine_reason\":\"injection\",\"sender_trust\":\"unauthenticated\","
+            + "\"injection_score\":97,\"phishing_score\":12,\"virus_signature\":null}]}";
+    ListResponse<QuarantinedEmail> held =
+        ms.inboxes().quarantine().list("i1", ListOptions.builder().limit(5).build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/quarantine", server.path);
+    assertEquals("limit=5", server.query);
+    assertEquals("injection", held.getData().get(0).getQuarantineReason());
+    assertEquals(97, held.getData().get(0).getInjectionScore());
+
+    server.responseBody =
+        "{\"object\":\"inbox_release\",\"inbox_id\":\"i1\",\"email_id\":\"r2\","
+            + "\"released_at\":\"2026-10-12T10:05:00.000Z\",\"trusted_sender\":\"eve@z.dev\"}";
+    QuarantineRelease released = ms.inboxes().quarantine().release("i1", "r2", true);
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/quarantine/r2/release", server.path);
+    assertEquals(json("{\"trust_sender\":true}"), body());
+    assertEquals("eve@z.dev", released.getTrustedSender());
+
+    ms.inboxes().quarantine().release("i1", "r2");
+    assertEquals(json("{}"), body());
+  }
+
+  @Test
+  void inboxLabels() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"data\":[{\"id\":\"l1\",\"name\":\"Billing\",\"color\":\"#FF0000\","
+            + "\"created_at\":\"2026-10-12T10:00:00.000Z\"}]}";
+    ListResponse<InboxLabel> labels = ms.inboxes().labels().list("i1");
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/labels", server.path);
+    assertEquals("#FF0000", labels.getData().get(0).getColor());
+    assertFalse(labels.isHasMore());
+
+    server.status = 201;
+    server.responseBody =
+        "{\"object\":\"inbox_label\",\"id\":\"l1\",\"name\":\"Billing\",\"color\":\"#FF0000\","
+            + "\"created_at\":\"2026-10-12T10:00:00.000Z\"}";
+    InboxLabel created =
+        ms.inboxes().labels().create("i1", InboxLabelOptions.builder().name("Billing").color("#ff0000").build());
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/labels", server.path);
+    assertEquals(json("{\"name\":\"Billing\",\"color\":\"#ff0000\"}"), body());
+    assertEquals("inbox_label", created.getObject());
+
+    server.status = 200;
+    ms.inboxes().labels().update("i1", "l1", InboxLabelOptions.builder().color("#00FF00").build());
+    assertEquals("PATCH", server.method);
+    assertEquals("/inboxes/i1/labels/l1", server.path);
+    assertEquals(json("{\"color\":\"#00FF00\"}"), body());
+
+    server.responseBody = "{\"object\":\"inbox_label\",\"id\":\"l1\",\"deleted\":true}";
+    ms.inboxes().labels().remove("i1", "l1");
+    assertEquals("DELETE", server.method);
+    assertEquals("/inboxes/i1/labels/l1", server.path);
+  }
+
+  static final String THREAD_ITEM_JSON =
+      "{\"id\":\"t1\",\"subject\":null,\"from\":\"Ada <ada@y.dev>\",\"to\":[\"bot@x.dev\"],\"cc\":[],"
+          + "\"bcc\":[],\"labels\":[{\"id\":\"l1\",\"name\":\"Billing\",\"color\":\"#FF0000\"}],"
+          + "\"message_count\":2,\"has_attachment\":false,\"has_draft\":true,\"read\":false,"
+          + "\"received_at\":\"2026-10-12T10:00:00.000Z\",\"folder\":\"a_folder_from_a_newer_server\"";
+
+  @Test
+  void inboxThreads() throws Exception {
+    server.responseBody = "{\"object\":\"list\",\"has_more\":false,\"data\":[" + THREAD_ITEM_JSON + "}]}";
+    ListResponse<InboxThread> list =
+        ms.inboxes()
+            .threads()
+            .list(
+                "i1",
+                ListThreadsOptions.builder()
+                    .folders("inbox", "archive")
+                    .labels("l1", "l2")
+                    .read(false)
+                    .limit(10)
+                    .after("t0")
+                    .includeQuarantined(true)
+                    .build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/threads", server.path);
+    assertEquals(
+        "folders=inbox%2Carchive&labels=l1%2Cl2&read=false&limit=10&after=t0&include_quarantined=true",
+        server.query);
+    InboxThread t = list.getData().get(0);
+    assertEquals("a_folder_from_a_newer_server", t.getFolder());
+    assertEquals("Billing", t.getLabels().get(0).getName());
+    assertEquals(2, t.getMessageCount());
+    assertTrue(t.getHasDraft());
+    assertNull(t.getSubject());
+    assertNull(t.getQuarantined());
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[" + THREAD_ITEM_JSON + ",\"quarantined\":2}]}";
+    list = ms.inboxes().threads().list("i1", ListThreadsOptions.builder().includeQuarantined(true).build());
+    assertEquals(2, list.getData().get(0).getQuarantined());
+
+    ms.inboxes().threads().list("i1");
+    assertNull(server.query);
+
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[" + THREAD_ITEM_JSON
+            + ",\"matched_email_id\":\"r1\",\"highlights\":{\"subject\":[\"Your **code**\"]}}]}";
+    list =
+        ms.inboxes()
+            .threads()
+            .search(
+                "i1",
+                SearchThreadsOptions.builder()
+                    .query("code -spam")
+                    .from("ada", "y.dev")
+                    .to("bot")
+                    .cc("c")
+                    .bcc("b")
+                    .hasAttachment(false)
+                    .startDate("2026-10-01")
+                    .endDate("2026-10-12")
+                    .folders("sent")
+                    .labels("l1")
+                    .read(true)
+                    .limit(5)
+                    .before("t9")
+                    .includeQuarantined(true)
+                    .build());
+    assertEquals("/inboxes/i1/threads/search", server.path);
+    assertEquals(
+        "folders=sent&labels=l1&read=true&limit=5&before=t9&include_quarantined=true&query=code+-spam"
+            + "&from=ada%2Cy.dev&to=bot&cc=c&bcc=b&has_attachment=false&start_date=2026-10-01"
+            + "&end_date=2026-10-12",
+        server.query);
+    assertEquals("r1", list.getData().get(0).getMatchedEmailId());
+    assertEquals("Your **code**", list.getData().get(0).getHighlights().get("subject").get(0));
+
+    server.responseBody =
+        "{\"object\":\"inbox_thread\",\"id\":\"t1\",\"subject\":\"Hi\",\"folder\":\"inbox\","
+            + "\"labels\":[],\"read\":true,\"quarantined\":0}";
+    InboxThread summary = ms.inboxes().threads().get("i1", "t1");
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/threads/t1", server.path);
+    assertEquals("inbox_thread", summary.getObject());
+    assertEquals(0, summary.getQuarantined());
+
+    ms.inboxes()
+        .threads()
+        .update("i1", "t1", UpdateThreadOptions.builder().read(true).folder("archive").labelId("l1").build());
+    assertEquals("PATCH", server.method);
+    assertEquals("/inboxes/i1/threads/t1", server.path);
+    assertEquals(json("{\"read\":true,\"folder\":\"archive\",\"label_id\":\"l1\"}"), body());
+
+    server.responseBody = "{\"object\":\"inbox_thread\",\"id\":\"t1\",\"deleted\":false}";
+    assertFalse(ms.inboxes().threads().remove("i1", "t1").getDeleted());
+    assertEquals("DELETE", server.method);
+    assertEquals("/inboxes/i1/threads/t1", server.path);
+  }
+
+  static final String SENT_JSON =
+      "{\"id\":\"e9\",\"email_id\":\"e9\",\"direction\":\"outbound\",\"from\":\"Acme <bot@x.dev>\","
+          + "\"to\":[\"ada@y.dev\"],\"cc\":[],\"bcc\":[],\"reply_to\":[],\"subject\":\"Re: Hi\",\"message_id\":null,"
+          + "\"html\":null,\"text\":\"Thanks\",\"attachments\":[{\"id\":\"0\",\"filename\":\"a.pdf\",\"size\":42}],"
+          + "\"read\":true,\"received_at\":\"2026-10-12T10:00:00.000Z\",\"status\":\"queued\","
+          + "\"thread_id\":\"t1\",\"inbox_id\":\"i1\"}";
+
+  @Test
+  void inboxThreadEmails() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"r1\",\"direction\":\"inbound\","
+            + "\"from\":\"Ada <ada@y.dev>\",\"to\":[\"bot@x.dev\"],\"cc\":[],\"bcc\":[],\"reply_to\":[],"
+            + "\"subject\":\"Hi\",\"message_id\":\"<m1@y.dev>\",\"html\":null,\"text\":\"Hi\","
+            + "\"attachments\":[],\"read\":false,\"received_at\":\"2026-10-12T10:00:00.000Z\","
+            + "\"extracted_text\":\"Hi\",\"screening\":{\"verdict\":\"suspicious\",\"sender_trust\":\"unauthenticated\"},"
+            + "\"spam_verdict\":\"gray\",\"virus_verdict\":null}]}";
+    ListResponse<ThreadEmail> list =
+        ms.inboxes().threads().emails().list("i1", "t1", ListOptions.builder().after("r0").build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/threads/t1/emails", server.path);
+    assertEquals("after=r0", server.query);
+    ThreadEmail inbound = list.getData().get(0);
+    assertEquals("inbound", inbound.getDirection());
+    assertEquals("suspicious", inbound.getScreening().getVerdict());
+    assertEquals("gray", inbound.getSpamVerdict());
+    ms.inboxes().threads().emails().list("i1", "t1", ListOptions.builder().after("r0").build(), true);
+    assertEquals("after=r0&include_quarantined=true", server.query);
+    ms.inboxes().threads().emails().list("i1", "t1");
+    assertNull(server.query);
+
+    server.responseBody = SENT_JSON;
+    ThreadEmail sentEmail = ms.inboxes().threads().emails().get("i1", "t1", "e9");
+    assertEquals("/inboxes/i1/threads/t1/emails/e9", server.path);
+    assertNull(server.query);
+    assertEquals("0", sentEmail.getAttachments().get(0).getId());
+    assertEquals("queued", sentEmail.getStatus());
+    ms.inboxes().threads().emails().get("i1", "t1", "e9", true);
+    assertEquals("include_quarantined=true", server.query);
+
+    SendResult<ThreadEmail> reply =
+        ms.inboxes()
+            .threads()
+            .emails()
+            .reply(
+                "i1", "t1", "r1",
+                ReplyOptions.builder().text("Thanks").cc("cc@x.dev").replyAll(true).requiresApproval(true).build(),
+                RequestOptions.idempotencyKey("k-1"));
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/threads/t1/emails/r1/reply", server.path);
+    assertEquals("k-1", server.header("Idempotency-Key"));
+    assertEquals(
+        json("{\"text\":\"Thanks\",\"cc\":[\"cc@x.dev\"],\"reply_all\":true,\"requires_approval\":true}"),
+        body());
+    assertFalse(reply.isDraft());
+    assertEquals("e9", reply.getSent().getEmailId());
+    assertEquals("i1", reply.getSent().getInboxId());
+
+    server.status = 202;
+    server.responseBody = DRAFT_JSON;
+    SendResult<ThreadEmail> forward =
+        ms.inboxes()
+            .threads()
+            .emails()
+            .forward("i1", "t1", "r1", ForwardOptions.builder().to("ops@x.dev", "cto@x.dev").build());
+    assertEquals("/inboxes/i1/threads/t1/emails/r1/forward", server.path);
+    assertEquals(json("{\"to\":[\"ops@x.dev\",\"cto@x.dev\"]}"), body());
+    assertTrue(forward.isDraft());
+    assertEquals("d1", forward.getDraft().getId());
+  }
+
+  @Test
+  void inboxDrafts() throws Exception {
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"d1\",\"type\":\"standalone\",\"to\":null,"
+            + "\"cc\":[],\"bcc\":[],\"subject\":null,\"snippet\":\"Hello\",\"thread_id\":null,"
+            + "\"reply_to_email_id\":null,\"updated_at\":\"2026-10-12T10:00:00.000Z\",\"status\":\"draft\","
+            + "\"approval_reasons\":[]}]}";
+    ListResponse<InboxDraft> list = ms.inboxes().drafts().list("i1", ListOptions.builder().limit(3).build());
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/drafts", server.path);
+    assertEquals("limit=3", server.query);
+    assertEquals("Hello", list.getData().get(0).getSnippet());
+    assertNull(list.getData().get(0).getTo());
+
+    server.status = 201;
+    server.responseBody = DRAFT_JSON;
+    InboxDraft created =
+        ms.inboxes()
+            .drafts()
+            .create(
+                "i1",
+                CreateDraftOptions.builder()
+                    .to("ada@y.dev")
+                    .cc("cc@x.dev")
+                    .bcc("bcc@x.dev")
+                    .subject("Re: Hi")
+                    .html("<p>Thanks</p>")
+                    .text("Thanks")
+                    .threadId("t1")
+                    .replyToEmailId("r1")
+                    .build());
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/drafts", server.path);
+    assertEquals(
+        json(
+            "{\"to\":[\"ada@y.dev\"],\"cc\":[\"cc@x.dev\"],\"bcc\":[\"bcc@x.dev\"],\"subject\":\"Re: Hi\","
+                + "\"html\":\"<p>Thanks</p>\",\"text\":\"Thanks\",\"thread_id\":\"t1\",\"reply_to_email_id\":\"r1\"}"),
+        body());
+    assertEquals("reply", created.getType());
+    assertEquals("2026-10-19T10:00:00.000Z", created.getExpiresAt());
+
+    server.status = 200;
+    ms.inboxes().drafts().get("i1", "d1");
+    assertEquals("GET", server.method);
+    assertEquals("/inboxes/i1/drafts/d1", server.path);
+
+    ms.inboxes()
+        .drafts()
+        .update(
+            "i1", "d1",
+            UpdateDraftOptions.builder()
+                .to(null)
+                .cc(Collections.emptyList())
+                .bcc(Arrays.asList("b@x.dev"))
+                .subject(null)
+                .text("New")
+                .html(null)
+                .build());
+    assertEquals("PATCH", server.method);
+    assertEquals("/inboxes/i1/drafts/d1", server.path);
+    assertEquals(
+        json("{\"to\":null,\"cc\":[],\"bcc\":[\"b@x.dev\"],\"subject\":null,\"text\":\"New\",\"html\":null}"),
+        body());
+
+    server.responseBody = "{\"object\":\"inbox_draft\",\"id\":\"d1\",\"thread_id\":\"t1\",\"email_id\":\"e9\"}";
+    SendResult<InboxDraft> sent =
+        ms.inboxes().drafts().send("i1", "d1", RequestOptions.idempotencyKey("send-1"));
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/drafts/d1/send", server.path);
+    assertEquals("", server.body);
+    assertNull(server.header("Content-Type"));
+    assertEquals("send-1", server.header("Idempotency-Key"));
+    assertFalse(sent.isDraft());
+    assertEquals("e9", sent.getSent().getEmailId());
+
+    server.status = 202;
+    server.responseBody = DRAFT_JSON;
+    SendResult<InboxDraft> held = ms.inboxes().drafts().send("i1", "d1");
+    assertTrue(held.isDraft());
+    assertEquals("pending_approval", held.getDraft().getStatus());
+
+    server.status = 200;
+    server.responseBody = DRAFT_JSON.replace("pending_approval", "rejected");
+    assertEquals("rejected", ms.inboxes().drafts().reject("i1", "d1").getStatus());
+    assertEquals("POST", server.method);
+    assertEquals("/inboxes/i1/drafts/d1/reject", server.path);
+
+    server.responseBody = "{\"object\":\"inbox_draft\",\"id\":\"d1\",\"deleted\":true}";
+    ms.inboxes().drafts().remove("i1", "d1");
+    assertEquals("DELETE", server.method);
+    assertEquals("/inboxes/i1/drafts/d1", server.path);
+  }
+
+  @Test
+  void approvalRequiredSurfacesAsTypedError() throws Exception {
+    server.status = 403;
+    server.responseBody =
+        "{\"statusCode\":403,\"name\":\"approval_required\",\"message\":\"A person must approve this draft\"}";
+    MillionSendException e =
+        assertThrows(MillionSendException.class, () -> ms.inboxes().drafts().send("i1", "d1"));
+    assertEquals("approval_required", e.getName());
+    assertEquals(403, e.getStatusCode());
+  }
+
+  @Test
+  void inboxFieldsOnDomainsKeysAndWebhooks() throws Exception {
+    server.responseBody = DOMAIN_JSON.replace("\"records\"", "\"receiving_catch_all\":true,\"records\"");
+    assertTrue(ms.domains().get("d1").getReceivingCatchAll());
+    ms.domains().update(UpdateDomainOptions.builder().id("d1").receivingCatchAll(false).build());
+    assertEquals(json("{\"receiving_catch_all\":false}"), body());
+
+    server.responseBody = "{\"id\":\"k1\",\"token\":\"ms_secret\"}";
+    ms.apiKeys().create(CreateApiKeyOptions.builder().name("agent").permission("full_access").inboxId("i1").build());
+    assertEquals(json("{\"name\":\"agent\",\"permission\":\"full_access\",\"inbox_id\":\"i1\"}"), body());
+    server.responseBody =
+        "{\"object\":\"list\",\"has_more\":false,\"data\":[{\"id\":\"k1\",\"name\":\"agent\","
+            + "\"created_at\":\"2026-01-01T00:00:00.000Z\",\"last_used_at\":null,\"inbox_id\":\"i1\"}]}";
+    assertEquals("i1", ms.apiKeys().list().getData().get(0).getInboxId());
+
+    server.responseBody = "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_abc\"}";
+    ms.webhooks()
+        .create(
+            CreateWebhookOptions.builder()
+                .endpoint("https://x.dev/hook")
+                .events(WebhookEvent.EMAIL_RECEIVED, WebhookEvent.INBOX_EMAIL_QUARANTINED)
+                .inboxIds(Collections.singletonList("i1"))
+                .build());
+    assertEquals(
+        json(
+            "{\"endpoint\":\"https://x.dev/hook\",\"events\":[\"email.received\",\"inbox.email.quarantined\"],"
+                + "\"inbox_ids\":[\"i1\"]}"),
+        body());
+    ms.webhooks().update("w1", UpdateWebhookOptions.builder().inboxIds(null).build());
+    assertEquals(json("{\"inbox_ids\":null}"), body());
+
+    server.responseBody =
+        "{\"object\":\"webhook\",\"id\":\"w1\",\"endpoint\":\"https://x.dev/hook\","
+            + "\"created_at\":\"2026-01-01T00:00:00.000Z\",\"status\":\"enabled\","
+            + "\"events\":[\"inbox.thread.created\"],\"inbox_ids\":[\"i1\",\"i2\"]}";
+    Webhook w = ms.webhooks().get("w1");
+    assertEquals(Arrays.asList("i1", "i2"), w.getInboxIds());
+  }
+
+  @Test
+  void webhookEventsCoverReceivingAndInboxes() throws Exception {
+    String[] wire = {
+      "email.received", "inbox.created", "inbox.updated", "inbox.deleted", "inbox.expired",
+      "inbox.thread.created", "inbox.thread.folder.updated", "inbox.thread.labels.updated",
+      "inbox.email.received", "inbox.email.sent", "inbox.email.quarantined",
+      "inbox.draft.created", "inbox.draft.updated", "inbox.draft.sent", "inbox.draft.deleted"
+    };
+    for (String value : wire) {
+      WebhookEvent e = WebhookEvent.fromValue(value);
+      assertEquals(value, e.getValue());
+    }
+    assertNull(WebhookEvent.fromValue("inbox.thread.assigned"));
   }
 }
