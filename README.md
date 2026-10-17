@@ -594,8 +594,9 @@ Treat `reason` and `type` as open sets. `suppression.added` and `suppression.rem
 carry `source_id`: the email whose bounce or complaint created the entry, else `null`.
 
 `EMAIL_PREFETCHED`, a MillionSend extension, is opt-in: it reaches only endpoints that
-name it. It fires when a machine fetched the tracking pixel or followed a link (Apple Mail
-Privacy Protection, Gmail's prefetch, a security scanner, a fetch seconds after delivery);
+name it. It fires when a machine fetched the tracking pixel or followed a link (for
+example Apple Mail Privacy Protection, Gmail's prefetch, a security scanner or a fetch
+seconds after delivery);
 `data.open.reason` or `data.click.reason` says which.
 
 The `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`) are delivered
@@ -674,7 +675,7 @@ v0.13.0 `since` is ignored, so the code already used can come back.
 | v0.12.0 | `username`; inboxes that never expire by default; sends from the shared domain under its mode; `name_review_unavailable`; `statusCode` and `name` on contacts batch errors |
 | v0.13.0 | newest-first lists; `since` on `codes().latest`; `quarantined` on thread items; inbox names up to 320 characters; `unread` with an inbox-scoped key; a JSON 404 for unknown routes |
 | v0.14.0 | the shared row of `domains().list()` (`isShared()`, `getSendingMode()`, `getSendingModeReason()`); `domainId` on `inboxes().create`; `subject` up to 998 characters |
-| v0.15.1 | the `EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` webhook events; `source_id` on `suppression.*` events |
+| v0.15.1 | the `EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` webhook events; `source_id` on `suppression.*` events; the metadata-only `suppressed` email kept when the suppression list alone refuses an `emails().send` |
 
 ## Migrating from Resend
 
