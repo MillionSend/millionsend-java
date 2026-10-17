@@ -97,7 +97,9 @@ refuse; one they hold is a 202 draft), `inbox_send_cap_reached` (429, the inbox'
 cap, or the team's on the shared domain), `approval_required` (403), `email_quarantined`
 (403), `email_blocked` (410, a download of an email that carries malware), `too_many_waits`
 (429, too many concurrent long-polls) and `name_review_unavailable` (503, a name on the
-shared domain can't be reviewed right now).
+shared domain can't be reviewed right now). A quarantine release adds `trust_not_allowed`
+(403) and `held_by_screening` (409), see [Inboxes](#inboxes); it answers `forbidden` (403)
+and `screening_unavailable` (503) only to MCP clients.
 
 An unknown route answers `404 not_found`. Servers before v0.13.0 answer it in plain
 text, which surfaces as `application_error` with status 404.
@@ -433,7 +435,7 @@ ms.inboxes().safety().update(inboxId, InboxSafetyOptions.builder()
 
 // Quarantine: held mail is kept and listed until a person releases it
 ms.inboxes().quarantine().list(inboxId);
-ms.inboxes().quarantine().release(inboxId, emailId, true); // true also allowlists the sender
+ms.inboxes().quarantine().release(inboxId, emailId);
 
 // Threads and their emails
 ms.inboxes().threads().list(inboxId, ListThreadsOptions.builder().folders("inbox", "archive").read(false).build());
@@ -471,6 +473,13 @@ reply to a Reply-To at another organization is held that way too, with
 `reply_to_redirect` among its approval reasons. Folder, verdict, kind and status
 values are plain strings, so new server values never break decoding. Hosted agent
 settings (`/inboxes/{id}/agent`) are not exposed: MillionSend runs no agent of its own.
+
+On an agent inbox with `screening` on, mail held before screening ran (`not_allowlisted`,
+`unauthenticated_sender`, `failed_auth`) is screened at release when screening can run: if
+it finds prompt injection or phishing, the email stays held as `injection` or `phishing`
+(409 `held_by_screening`). `release(inboxId, emailId, true)` also adds the sender to the
+allowlist, only for mail held as `not_allowlisted` from a sender that authenticated
+(`getSenderTrust()` `"external"`); anything else answers 403 `trust_not_allowed`.
 
 An inbox never expires unless `expiresIn` says so, and its `name` takes up to 320
 characters. `domainId` takes a `domains().list()` row instead of `emailAddress`: the
@@ -676,6 +685,7 @@ v0.13.0 `since` is ignored, so the code already used can come back.
 | v0.13.0 | newest-first lists; `since` on `codes().latest`; `quarantined` on thread items; inbox names up to 320 characters; `unread` with an inbox-scoped key; a JSON 404 for unknown routes |
 | v0.14.0 | the shared row of `domains().list()` (`isShared()`, `getSendingMode()`, `getSendingModeReason()`); `domainId` on `inboxes().create`; `subject` up to 998 characters |
 | v0.15.1 | the `EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` webhook events; `source_id` on `suppression.*` events; the metadata-only `suppressed` email kept when the suppression list alone refuses an `emails().send` |
+| v0.16.0 | release rules: `trustSender` only for a `not_allowlisted` hold from an authenticated sender (`trust_not_allowed`); screening at release (`held_by_screening`) |
 
 ## Migrating from Resend
 
