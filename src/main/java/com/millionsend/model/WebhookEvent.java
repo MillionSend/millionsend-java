@@ -5,11 +5,17 @@ import com.fasterxml.jackson.annotation.JsonValue;
 
 /** An event type a webhook can subscribe to. */
 public enum WebhookEvent {
+  /** Accepted with a future {@code scheduledAt}. MillionSend v0.15.1 and later. */
+  EMAIL_SCHEDULED("email.scheduled"),
   EMAIL_SENT("email.sent"),
   EMAIL_DELIVERED("email.delivered"),
   EMAIL_DELIVERY_DELAYED("email.delivery_delayed"),
   EMAIL_BOUNCED("email.bounced"),
   EMAIL_COMPLAINED("email.complained"),
+  /** Failed for good; {@code data.failed.reason} says why. MillionSend v0.15.1 and later. */
+  EMAIL_FAILED("email.failed"),
+  /** Won't be sent; {@code data.suppressed} says why. MillionSend v0.15.1 and later. */
+  EMAIL_SUPPRESSED("email.suppressed"),
   EMAIL_OPENED("email.opened"),
   EMAIL_CLICKED("email.clicked"),
   /** Mail received at a receiving domain or inbox. */
@@ -35,9 +41,7 @@ public enum WebhookEvent {
   CONTACT_TOPIC_OPT_IN("contact.topic_opt_in"),
   /** MillionSend extension. */
   CONTACT_TOPIC_OPT_OUT("contact.topic_opt_out"),
-  /** MillionSend extension. */
   SUPPRESSION_ADDED("suppression.added"),
-  /** MillionSend extension. */
   SUPPRESSION_REMOVED("suppression.removed"),
   // Inbox events reach only endpoints that name them; subscribing to all events skips them.
   INBOX_CREATED("inbox.created"),

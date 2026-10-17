@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.9.0</version>
+  <version>0.10.0</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.9.0'
+implementation 'com.millionsend:millionsend-java:0.10.0'
 ```
 
 Requires Java 11+.
@@ -571,8 +571,24 @@ r.getPreviousSecretExpiresAt();   // when the previous secret stops signing; nul
 
 During the overlap every delivery carries both signatures, so a receiver
 holding either verifies. `deliverability.*`, `quota.*`, `contact.unsubscribed`,
-`contact.resubscribed`, `contact.topic_opt_in`, `contact.topic_opt_out` and
-`suppression.*` events are MillionSend extensions.
+`contact.resubscribed`, `contact.topic_opt_in` and `contact.topic_opt_out` events
+are MillionSend extensions.
+
+`EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` need MillionSend v0.15.1 or
+later: an older server answers `422 validation_error` to a webhook naming them.
+
+- `email.scheduled`: an email was accepted with a future `scheduledAt`; rescheduling
+  it fires nothing.
+- `email.failed`: the email failed for good (it won't be sent, or SES refused it after
+  `email.sent`); `data.failed.reason` says why.
+- `email.suppressed`: the email won't be sent (the suppression list, an unsubscribe or
+  a topic opt-out stopped it, or its contact, broadcast or topic was deleted or changed
+  first); `data.suppressed` carries `type`, `message` and `reason`. It also fires when
+  the suppression list alone makes a `POST /emails` answer
+  `422 all_recipients_suppressed`. Dropping only some recipients fires nothing.
+
+Treat `reason` and `type` as open sets. `suppression.added` and `suppression.removed`
+carry `source_id`: the email whose bounce or complaint created the entry, else `null`.
 
 The `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`) are delivered
 only to endpoints that name them; an endpoint subscribed to all events skips
@@ -650,6 +666,7 @@ v0.13.0 `since` is ignored, so the code already used can come back.
 | v0.12.0 | `username`; inboxes that never expire by default; sends from the shared domain under its mode; `name_review_unavailable`; `statusCode` and `name` on contacts batch errors |
 | v0.13.0 | newest-first lists; `since` on `codes().latest`; `quarantined` on thread items; inbox names up to 320 characters; `unread` with an inbox-scoped key; a JSON 404 for unknown routes |
 | v0.14.0 | the shared row of `domains().list()` (`isShared()`, `getSendingMode()`, `getSendingModeReason()`); `domainId` on `inboxes().create`; `subject` up to 998 characters |
+| v0.15.1 | the `EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` webhook events; `source_id` on `suppression.*` events |
 
 ## Migrating from Resend
 

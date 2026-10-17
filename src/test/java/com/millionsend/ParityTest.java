@@ -1685,4 +1685,29 @@ class ParityTest {
     }
     assertNull(WebhookEvent.fromValue("inbox.thread.assigned"));
   }
+
+  @Test
+  void webhookEventsCoverScheduledFailedAndSuppressed() throws Exception {
+    String[] wire = {"email.scheduled", "email.failed", "email.suppressed"};
+    for (String value : wire) {
+      WebhookEvent e = WebhookEvent.fromValue(value);
+      assertEquals(value, e.getValue());
+    }
+
+    server.responseBody = "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_abc\"}";
+    ms.webhooks()
+        .create(
+            CreateWebhookOptions.builder()
+                .endpoint("https://x.dev/hook")
+                .events(
+                    WebhookEvent.EMAIL_SCHEDULED,
+                    WebhookEvent.EMAIL_FAILED,
+                    WebhookEvent.EMAIL_SUPPRESSED)
+                .build());
+    assertEquals(
+        json(
+            "{\"endpoint\":\"https://x.dev/hook\","
+                + "\"events\":[\"email.scheduled\",\"email.failed\",\"email.suppressed\"]}"),
+        body());
+  }
 }
