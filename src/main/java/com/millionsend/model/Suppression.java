@@ -26,7 +26,7 @@ public final class Suppression {
     return origin;
   }
 
-  /** The email whose bounce/complaint created the entry; {@code null} for manual ones. */
+  /** The email whose bounce or complaint created the entry; {@code null} otherwise. */
   public String getSourceId() {
     return sourceId;
   }
