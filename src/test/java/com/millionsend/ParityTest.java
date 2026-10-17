@@ -1710,4 +1710,18 @@ class ParityTest {
                 + "\"events\":[\"email.scheduled\",\"email.failed\",\"email.suppressed\"]}"),
         body());
   }
+
+  @Test
+  void webhookEventsCoverPrefetched() throws Exception {
+    assertEquals(WebhookEvent.EMAIL_PREFETCHED, WebhookEvent.fromValue("email.prefetched"));
+
+    server.responseBody = "{\"object\":\"webhook\",\"id\":\"w1\",\"signing_secret\":\"whsec_abc\"}";
+    ms.webhooks()
+        .create(
+            CreateWebhookOptions.builder()
+                .endpoint("https://x.dev/hook")
+                .events(WebhookEvent.EMAIL_PREFETCHED)
+                .build());
+    assertEquals(json("{\"endpoint\":\"https://x.dev/hook\",\"events\":[\"email.prefetched\"]}"), body());
+  }
 }

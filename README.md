@@ -87,7 +87,10 @@ try {
 
 `POST /emails` and `POST /emails/batch` answer `422 all_recipients_suppressed`
 ("All recipients are suppressed") when every `to` recipient is on the
-suppression list or opted out of the send's `topicId`.
+suppression list or opted out of the send's `topicId`. From v0.15.1, when the
+suppression list alone empties `to`, `POST /emails` also keeps a metadata-only
+`suppressed` email that fires `email.suppressed`; each retry keeps another, even with
+the same `Idempotency-Key` (a refused send doesn't hold its key).
 
 Inboxes add `inbox_send_policy` (403, a send the inbox's rules or the shared domain
 refuse; one they hold is a 202 draft), `inbox_send_cap_reached` (429, the inbox's daily
@@ -589,6 +592,11 @@ later: an older server answers `422 validation_error` to a webhook naming them.
 
 Treat `reason` and `type` as open sets. `suppression.added` and `suppression.removed`
 carry `source_id`: the email whose bounce or complaint created the entry, else `null`.
+
+`EMAIL_PREFETCHED`, a MillionSend extension, is opt-in: it reaches only endpoints that
+name it. It fires when a machine fetched the tracking pixel or followed a link (Apple Mail
+Privacy Protection, Gmail's prefetch, a security scanner, a fetch seconds after delivery);
+`data.open.reason` or `data.click.reason` says which.
 
 The `inbox.*` events (`INBOX_CREATED` … `INBOX_DRAFT_DELETED`) are delivered
 only to endpoints that name them; an endpoint subscribed to all events skips

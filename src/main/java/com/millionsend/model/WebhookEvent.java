@@ -18,6 +18,11 @@ public enum WebhookEvent {
   EMAIL_SUPPRESSED("email.suppressed"),
   EMAIL_OPENED("email.opened"),
   EMAIL_CLICKED("email.clicked"),
+  /**
+   * MillionSend extension, opt-in: delivered only to endpoints that name it. A machine fetched
+   * the pixel or followed a link; {@code data.open.reason} or {@code data.click.reason} says which.
+   */
+  EMAIL_PREFETCHED("email.prefetched"),
   /** Mail received at a receiving domain or inbox. */
   EMAIL_RECEIVED("email.received"),
   /** MillionSend extension. */
