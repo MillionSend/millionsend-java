@@ -265,12 +265,15 @@ class ParityTest {
         "{\"object\":\"contact\",\"id\":\"c1\",\"email\":\"c@x.dev\",\"first_name\":null,"
             + "\"last_name\":null,\"created_at\":\"2026-01-01T00:00:00.000Z\",\"unsubscribed\":false,"
             + "\"properties\":{\"plan\":{\"type\":\"string\",\"value\":\"pro\"},"
-            + "\"seats\":{\"type\":\"number\",\"value\":3}}}";
+            + "\"seats\":{\"type\":\"number\",\"value\":3},"
+            + "\"renews\":{\"type\":\"date\",\"value\":\"2026-01-08\"}}}";
     Contact c = ms.contacts().get("c1");
     assertEquals("string", c.getProperties().get("plan").getType());
     assertEquals("pro", c.getProperties().get("plan").getValue());
     assertEquals("number", c.getProperties().get("seats").getType());
     assertEquals(3, ((Number) c.getProperties().get("seats").getValue()).intValue());
+    assertEquals("date", c.getProperties().get("renews").getType());
+    assertEquals("2026-01-08", c.getProperties().get("renews").getValue());
   }
 
   @Test

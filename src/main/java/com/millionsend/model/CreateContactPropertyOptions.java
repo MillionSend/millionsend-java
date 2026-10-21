@@ -24,13 +24,19 @@ public final class CreateContactPropertyOptions {
       return this;
     }
 
-    /** {@code string} or {@code number}. */
+    /**
+     * {@code string}, {@code number} or {@code date}. {@code date} is a MillionSend extension:
+     * its values must read as an ISO 8601 date ({@code 2026-01-08}, midnight UTC), an ISO 8601
+     * date-time ({@code 2026-01-08T10:30:00Z} or {@code 2026-01-08 10:30}, UTC when it names no
+     * zone) or Unix time in seconds or milliseconds from 2000 to 2100, else the write fails
+     * with 422 {@code validation_error}.
+     */
     public Builder type(String type) {
       o.type = type;
       return this;
     }
 
-    /** A {@link String} or a {@link Number} matching {@code type}. */
+    /** A {@link String} or a {@link Number} matching {@code type}; for {@code date}, a date. */
     public Builder fallbackValue(Object fallbackValue) {
       o.fallbackValue = fallbackValue;
       return this;

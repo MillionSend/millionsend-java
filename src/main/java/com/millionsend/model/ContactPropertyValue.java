@@ -6,12 +6,15 @@ public final class ContactPropertyValue {
   private String type;
   private Object value;
 
-  /** {@code string} or {@code number}. */
+  /** {@code string}, {@code number} or {@code date} (MillionSend extension). */
   public String getType() {
     return type;
   }
 
-  /** A {@link String} or a {@link Number}, matching {@link #getType()}. */
+  /**
+   * A {@link Number} when {@link #getType()} is {@code number}, else a {@link String}; a
+   * {@code date} value is the date as it was written.
+   */
   public Object getValue() {
     return value;
   }
