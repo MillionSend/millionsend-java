@@ -26,7 +26,7 @@ public final class ContactProperty {
     return key;
   }
 
-  /** {@code string} or {@code number}. */
+  /** {@code string}, {@code number} or {@code date} (MillionSend extension). */
   public String getType() {
     return type;
   }

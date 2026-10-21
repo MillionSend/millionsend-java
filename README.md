@@ -278,7 +278,8 @@ ms.contacts().batch().remove(RemoveContactsOptions.builder().ids(List.of(a)).era
 ```
 
 `Contact.getProperties()` returns `Map<String, ContactPropertyValue>` — each
-value carries its declared `type` (`string`/`number`) and the `value`.
+value carries its declared `type` (`string`/`number`/`date`) and the `value`, a
+`String` for a date.
 `Contact.getTopics()` returns the same rows as `contacts().topics().list(...)`;
 on list and batch reads both are `null` unless `include` asked for them.
 
@@ -292,6 +293,12 @@ ms.contactProperties().list();
 ms.contactProperties().update(UpdateContactPropertyOptions.builder().id(id).fallbackValue(null).build()); // null clears
 ms.contactProperties().remove(id);
 ```
+
+`type` is `string`, `number` or `date` (MillionSend extension). A date property's
+values and `fallbackValue` must read as an ISO 8601 date (`2026-01-08`, midnight UTC),
+an ISO 8601 date-time (`2026-01-08T10:30:00Z` or `2026-01-08 10:30`, UTC when it names
+no zone) or Unix time in seconds or milliseconds from 2000 to 2100; anything else is
+refused with `422 validation_error`.
 
 ### Topics
 
@@ -686,6 +693,7 @@ v0.13.0 `since` is ignored, so the code already used can come back.
 | v0.14.0 | the shared row of `domains().list()` (`isShared()`, `getSendingMode()`, `getSendingModeReason()`); `domainId` on `inboxes().create`; `subject` up to 998 characters |
 | v0.15.1 | the `EMAIL_SCHEDULED`, `EMAIL_FAILED` and `EMAIL_SUPPRESSED` webhook events; `source_id` on `suppression.*` events; the metadata-only `suppressed` email kept when the suppression list alone refuses an `emails().send` |
 | v0.16.0 | release rules: `trustSender` only for a `not_allowlisted` hold from an authenticated sender (`trust_not_allowed`); screening at release (`held_by_screening`) |
+| v0.22.0 | the `date` contact property type; the segment ops `before` and `after` (an ISO 8601 date or date-time) and `in_last_days` and `not_in_last_days` (a day count from `"1"` to `"36500"`) on `created_at` and `property:<key>` |
 
 ## Migrating from Resend
 
@@ -708,7 +716,7 @@ Notes:
 - **No audiences**: contacts are team-global, so there is no `.audiences()` resource and no `audienceId` anywhere. The server keeps `/audiences/*` only as a compatibility shim; it is not part of this SDK. `.segments()` is MillionSend's dynamic-filter feature, not Resend's audience alias.
 - **Request options** use the same `RequestOptions` builder shape (`setIdempotencyKey`, `add(header, value)`), plus `batchValidation(...)`.
 - Errors throw `MillionSendException` (in place of Resend's `ResendException`) with the same `{ statusCode, name, message }` fields.
-- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`, `MillionSendException.getRetryAfter()`, and in `receiving()` and `inboxes()` the long-poll `waitSeconds`, the reply/forward/remove of received mail, inbox `safety()`, `codes()`, `quarantine()`, draft `reject()`, the `username` and `domainId` of `inboxes().create` and the extension fields.
+- **MillionSend extensions** (no Resend counterpart): `segments()`, `deliverability()`, `usage()`, `contacts().batch()`, `contacts().preferencesLink()`, `webhooks().rotate()`, `emails().remove()`, `emails().getInsights()`, `Email.getScore()`, the `date` contact property type, `MillionSendException.getRetryAfter()`, and in `receiving()` and `inboxes()` the long-poll `waitSeconds`, the reply/forward/remove of received mail, inbox `safety()`, `codes()`, `quarantine()`, draft `reject()`, the `username` and `domainId` of `inboxes().create` and the extension fields.
 
 ## Build & test
 
