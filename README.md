@@ -15,14 +15,14 @@ Maven:
 <dependency>
   <groupId>com.millionsend</groupId>
   <artifactId>millionsend-java</artifactId>
-  <version>0.10.1</version>
+  <version>0.10.2</version>
 </dependency>
 ```
 
 Gradle:
 
 ```groovy
-implementation 'com.millionsend:millionsend-java:0.10.1'
+implementation 'com.millionsend:millionsend-java:0.10.2'
 ```
 
 Requires Java 11+.
